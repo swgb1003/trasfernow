@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_theme.dart';
 import 'router.dart';
 
-class TransferNowApp extends StatelessWidget {
+class TransferNowApp extends StatefulWidget {
   const TransferNowApp({super.key});
+
+  @override
+  State<TransferNowApp> createState() => _TransferNowAppState();
+}
+
+class _TransferNowAppState extends State<TransferNowApp> {
+  late final GoRouter _router = buildAppRouter();
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +22,7 @@ class TransferNowApp extends StatelessWidget {
       theme: AppTheme.dark,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.dark,
-      routerConfig: appRouter,
+      routerConfig: _router,
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/transfer_case_providers.dart';
+import '../../widgets/breaking_entrance.dart';
 import '../../widgets/transfer_case_card.dart';
 
 class LiveScreen extends ConsumerStatefulWidget {
@@ -73,11 +74,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               itemCount: cases.length,
               itemBuilder: (context, index) {
                 final c = cases[index];
-                return TransferCaseCard(
+                final card = TransferCaseCard(
                   transferCase: c,
                   isBreaking: index == 0,
                   onTap: () => context.push('/case/${c.id}'),
                 );
+                return index == 0
+                    ? BreakingEntrance(key: ValueKey(c.id), child: card)
+                    : card;
               },
             ),
           ),
