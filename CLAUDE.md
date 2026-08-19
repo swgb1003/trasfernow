@@ -52,3 +52,5 @@ lib/
 - **無限ループするアニメーションがある画面で `pumpAndSettle()` を使わない**: パルス演出(`..repeat(reverse: true)`など)は永久に「settle」しないためテストがハングする。`for`ループで `tester.pump(Duration(...))` を規定回数呼ぶ方式にする。
 - **`context.push()` 直後は1回空の `pump()` を挟む**: go_routerの画面遷移トランジションは、時間を指定した`pump(duration)`だけだと開始前のフレームを拾えないことがある。`await tester.pump(); await tester.pump(duration);` の2段階にすると安定する。
 - **`find.text()` の文字列重複に注意**: 同じ文字列が別の場所でも使われていないか確認する(例: `TransferCase.probabilityLabel` が100%のとき返す `'OFFICIAL'` と、OFFICIAL演出オーバーレイの見出し文字列が衝突した)。曖昧な場合は `find.byType()` や `find.textContaining()` で一意に絞る。
+- **`showModalBottomSheet`の中身は`MediaQuery.size.height`から自前でmaxHeightを計算しない**: シートの実際の高さは`isScrollControlled`の指定や画面サイズによって変わり、自前計算とズレるとオーバーフローする(実際に発生した)。`isScrollControlled: true` を指定した上で、可変長リスト部分は`ConstrainedBox`ではなく`Flexible`にラップし、親から降りてくる実際の制約に従わせる。
+- **長いリストを`ListView(children:[...])`でテストする場合は`scrollUntilVisible`→`ensureVisible`の2段階にする**: 対象がビューポート外だと`find`で見つからず(`.builder`でなくてもスライバーは遅延マウントされる)、`scrollUntilVisible`だけだと要素の中心が可視領域の外に残ることがありタップが外れる(シートのバリアに当たって閉じてしまう)。`scrollUntilVisible`で存在を確定させた後、`ensureVisible`で完全に可視領域内へ寄せてからタップする。

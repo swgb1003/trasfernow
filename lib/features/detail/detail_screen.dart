@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format/relative_time.dart';
 import '../../core/theme/app_colors.dart';
+import '../../data/favorites_provider.dart';
 import '../../data/transfer_case_providers.dart';
 import '../../models/transfer_case.dart';
 import '../../models/transfer_status.dart';
@@ -51,21 +52,31 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
   }
 }
 
-class _DetailContent extends StatelessWidget {
+class _DetailContent extends ConsumerWidget {
   const _DetailContent({required this.transferCase});
 
   final TransferCase transferCase;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isFavorite = ref.watch(
+      favoritesProvider.select((s) => s.playerCaseIds.contains(transferCase.id)),
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(transferCase.playerName),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: Icon(Icons.star_border),
+        actions: [
+          IconButton(
+            icon: Icon(
+              isFavorite ? Icons.star : Icons.star_border,
+              color: isFavorite ? AppColors.negotiation : null,
+            ),
+            onPressed: () => ref
+                .read(favoritesProvider.notifier)
+                .togglePlayerCase(transferCase.id),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: ListView(

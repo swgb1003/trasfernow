@@ -105,4 +105,66 @@ void main() {
     expect(find.byType(OfficialRevealOverlay), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('MY screen manages favorite clubs and players', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('MY'));
+    await tester.pumpAndSettle();
+
+    // Seeded favorites (FavoritesNotifier's initial state).
+    expect(find.text('Chelsea'), findsOneWidget);
+    expect(find.text('Alejandro Garnacho'), findsOneWidget);
+
+    // Remove a favorite club via its "x" badge.
+    await tester.tap(find.byKey(const ValueKey('remove-club-Chelsea')));
+    await tester.pumpAndSettle();
+    expect(find.text('Chelsea'), findsNothing);
+
+    // Add it back via the "追加" picker sheet (club section is first).
+    await tester.tap(find.text('追加').first);
+    await tester.pumpAndSettle();
+    expect(find.text('クラブを追加'), findsOneWidget);
+    final pickerScrollable = find.descendant(
+      of: find.byKey(const ValueKey('add-picker-list')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(find.text('Liverpool'), 50,
+        scrollable: pickerScrollable);
+    // scrollUntilVisible stops as soon as any part is visible, which can
+    // leave it only partially in view (and its computed center outside the
+    // sheet's clip bounds); nudge it fully into view before tapping.
+    await tester.ensureVisible(find.text('Liverpool'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Liverpool'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(200, 60)); // dismiss the sheet
+    await tester.pumpAndSettle();
+
+    expect(find.text('Liverpool'), findsOneWidget);
+
+    // The star toggle on the detail screen shares state with this screen.
+    await tester.tap(find.text('SEARCH'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Osimhen');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Victor Osimhen'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byIcon(Icons.star), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.star));
+    await tester.pump();
+    expect(find.byIcon(Icons.star_border), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('MY'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Victor Osimhen'), findsNothing);
+  });
 }
