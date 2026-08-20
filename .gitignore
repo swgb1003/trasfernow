@@ -39,6 +39,9 @@ migrate_working_dir/
 # Firebase Admin SDK credentials must never be committed.
 **/service-account*.json
 /firebase/node_modules/
+/firebase/.env
+/firebase/.env.*
+!/firebase/.env.example
 
 # Licensed editorial images are uploaded to Firebase Storage, not Git.
 /firebase/assets/players/*

@@ -12,7 +12,20 @@
           "package_name": "com.transfernow.transfer_now"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "296388715263-olqbb3dibnc8nt1pijfn381urv8t4dpp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.transfernow.transfer_now",
+            "certificate_hash": "5be1218d189270b34576124a7bd644399c2931e4"
+          }
+        },
+        {
+          "client_id": "296388715263-uafiqj2elea8c6pkjc4qsasehsgm4k08.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAWeK-iaNjz0yUYCuOaknfLcsMl5U5SZYE"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "296388715263-uafiqj2elea8c6pkjc4qsasehsgm4k08.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

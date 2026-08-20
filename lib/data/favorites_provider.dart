@@ -85,7 +85,11 @@ class FavoritesNotifier extends StateNotifier<FavoritesState> {
         (!synchronizedBefore && _hasExplicitLocalData);
 
     if (hasPendingChanges) {
-      await _pushCloud();
+      if (!synchronizedBefore && _hasExplicitLocalData) {
+        await _mergeCloud();
+      } else {
+        await _pushCloud();
+      }
       return;
     }
 
@@ -127,6 +131,38 @@ class FavoritesNotifier extends StateNotifier<FavoritesState> {
     } catch (error) {
       debugPrint(
         'Favorite cloud sync failed; local changes are pending: $error',
+      );
+    }
+  }
+
+  Future<void> _mergeCloud() async {
+    final cloud = _cloud;
+    if (cloud == null) return;
+    final revision = _revision;
+    final snapshot = FavoritePreferencesData(
+      clubs: {...state.clubs},
+      playerCaseIds: {...state.playerCaseIds},
+    );
+    await _prefs.setBool(_pendingKey, true);
+    try {
+      final merged = await cloud.mergeFavorites(snapshot);
+      if (!mounted) return;
+      state = FavoritesState(
+        clubs: {...merged.clubs, if (revision != _revision) ...state.clubs},
+        playerCaseIds: {
+          ...merged.playerCaseIds,
+          if (revision != _revision) ...state.playerCaseIds,
+        },
+      );
+      await _persistLocal();
+      if (revision == _revision) {
+        await _markSynchronized();
+      } else {
+        await _pushCloud();
+      }
+    } catch (error) {
+      debugPrint(
+        'Favorite cloud merge failed; local changes are pending: $error',
       );
     }
   }

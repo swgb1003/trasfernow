@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../data/account_service.dart';
+import '../../data/firebase_service_providers.dart';
 import '../../data/favorites_provider.dart';
 import '../../data/club_catalog.dart';
 import '../../data/transfer_case_providers.dart';
@@ -35,6 +37,7 @@ class MyScreen extends ConsumerWidget {
                   .where((c) => favorites.playerCaseIds.contains(c.id))
                   .toList();
           return ListView(
+            key: const ValueKey('my-content-list'),
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
               const _ProfileHeader(),
@@ -213,52 +216,252 @@ class _AddPickerSheet extends StatelessWidget {
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
+class _ProfileHeader extends ConsumerWidget {
   const _ProfileHeader();
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const CircleAvatar(
-          radius: 28,
-          backgroundColor: AppColors.card,
-          child: Icon(Icons.person, color: AppColors.textSecondary, size: 28),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final identity = ref.watch(accountIdentityProvider);
+    final linkState = ref.watch(accountLinkControllerProvider);
+    final linked = identity?.isGoogleLinked ?? false;
+    final displayName =
+        linked && (identity?.displayName?.trim().isNotEmpty ?? false)
+            ? identity!.displayName!.trim()
+            : linked
+            ? 'Googleユーザー'
+            : 'ゲストユーザー';
+    final subtitle =
+        linked
+            ? (identity?.email ?? 'Googleアカウントと同期中')
+            : 'お気に入りをGoogleで安全に引き継げます';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: linked ? AppColors.accentLime : AppColors.cardBorder,
         ),
-        const SizedBox(width: 14),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        boxShadow: [
+          if (linked)
+            BoxShadow(
+              color: AppColors.accentLimeGlow.withValues(alpha: 0.08),
+              blurRadius: 18,
+              spreadRadius: 1,
+            ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
             children: [
-              Text(
-                'Footy Lover',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              _AccountAvatar(identity: identity),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              SizedBox(height: 2),
-              Text(
-                '@transfer_now',
-                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-              ),
+              const SizedBox(width: 10),
+              _AccountBadge(linked: linked),
             ],
           ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: AppColors.cardBorder),
-          ),
-          child: const Text(
-            'PRO',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              color: AppColors.negotiation,
+          if (!linked) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const ValueKey('google-link-button'),
+                onPressed:
+                    linkState.isLoading
+                        ? null
+                        : () => _linkGoogle(context, ref),
+                icon:
+                    linkState.isLoading
+                        ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const _GoogleMark(),
+                label: Text(
+                  linkState.isLoading ? 'Googleアカウントを確認中…' : 'Googleでデータを引き継ぐ',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.textSecondary),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(height: 8),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock_outline, size: 12, color: AppColors.textMuted),
+                SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    '課金なし・お気に入りと通知設定を端末変更後も復元',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _linkGoogle(BuildContext context, WidgetRef ref) async {
+    try {
+      final result =
+          await ref
+              .read(accountLinkControllerProvider.notifier)
+              .linkGoogleAccount();
+      if (!context.mounted) return;
+      final message = switch (result) {
+        GoogleAccountLinkResult.linkedCurrentUser =>
+          'Googleアカウントに連携しました。データを引き継げます。',
+        GoogleAccountLinkResult.signedIntoExistingUser =>
+          '既存アカウントにログインし、お気に入りを統合しました。',
+        GoogleAccountLinkResult.alreadyLinked => 'このGoogleアカウントは連携済みです。',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppColors.official),
+      );
+    } on AccountLinkException catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.userMessage),
+          backgroundColor:
+              error.isCancellation ? AppColors.card : AppColors.breaking,
         ),
-      ],
+      );
+    }
+  }
+}
+
+class _AccountAvatar extends StatelessWidget {
+  const _AccountAvatar({required this.identity});
+
+  final AccountIdentity? identity;
+
+  @override
+  Widget build(BuildContext context) {
+    final photoUrl = identity?.photoUrl;
+    return Container(
+      width: 56,
+      height: 56,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.surface,
+        border: Border.all(
+          color:
+              identity?.isGoogleLinked ?? false
+                  ? AppColors.accentLime
+                  : AppColors.cardBorder,
+        ),
+      ),
+      child:
+          photoUrl != null && photoUrl.isNotEmpty
+              ? Image.network(
+                photoUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const _AccountFallbackIcon(),
+              )
+              : const _AccountFallbackIcon(),
+    );
+  }
+}
+
+class _AccountFallbackIcon extends StatelessWidget {
+  const _AccountFallbackIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Icon(Icons.person, color: AppColors.textSecondary, size: 28);
+  }
+}
+
+class _AccountBadge extends StatelessWidget {
+  const _AccountBadge({required this.linked});
+
+  final bool linked;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(
+          color: linked ? AppColors.accentLime : AppColors.cardBorder,
+        ),
+      ),
+      child: Text(
+        linked ? 'SYNCED' : 'GUEST',
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.7,
+          color: linked ? AppColors.accentLime : AppColors.textMuted,
+        ),
+      ),
+    );
+  }
+}
+
+class _GoogleMark extends StatelessWidget {
+  const _GoogleMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 20,
+      height: 20,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: AppColors.textPrimary,
+        shape: BoxShape.circle,
+      ),
+      child: const Text(
+        'G',
+        style: TextStyle(
+          color: AppColors.rumour,
+          fontWeight: FontWeight.w900,
+          fontSize: 13,
+        ),
+      ),
     );
   }
 }

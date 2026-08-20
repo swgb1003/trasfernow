@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_theme.dart';
 import '../data/favorites_provider.dart';
+import '../data/firebase_service_providers.dart';
 import '../data/notification_settings_provider.dart';
 import '../data/onboarding_preferences.dart';
 import 'router.dart';
@@ -26,6 +29,17 @@ class _TransferNowAppState extends ConsumerState<TransferNowApp> {
     // See SPEC.md §13-§15, §36.
     ref.read(favoritesProvider);
     ref.read(notificationSettingsProvider);
+
+    // A Google credential may switch from this install's anonymous UID to an
+    // existing account UID. Re-register the FCM token below the active user.
+    // See SPEC.md §15, §24, §36.
+    ref.listenManual(firebaseUserProvider, (_, next) {
+      final user = next.asData?.value;
+      final firestore = ref.read(firebaseFirestoreProvider);
+      final messaging = ref.read(firebaseMessagingServiceProvider);
+      if (user == null || firestore == null || messaging == null) return;
+      unawaited(messaging.initialize(firestore: firestore, userId: user.uid));
+    });
 
     // See SPEC.md §20: screens 01-03 appear only before initial setup.
     final onboardingComplete =

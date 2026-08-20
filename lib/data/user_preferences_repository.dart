@@ -65,6 +65,8 @@ abstract interface class UserPreferencesRepository {
 
   Future<void> saveFavorites(FavoritePreferencesData data);
 
+  Future<FavoritePreferencesData> mergeFavorites(FavoritePreferencesData data);
+
   Future<NotificationPreferencesData?> loadNotifications();
 
   Future<void> saveNotifications(NotificationPreferencesData data);
@@ -109,6 +111,25 @@ class FirestoreUserPreferencesRepository implements UserPreferencesRepository {
       'playerCaseIds': data.playerCaseIds.toList()..sort(),
       'schemaVersion': 1,
       'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<FavoritePreferencesData> mergeFavorites(FavoritePreferencesData data) {
+    return _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(_favoritesDocument);
+      final existing = FavoritePreferencesData.fromFirestore(snapshot.data());
+      final merged = FavoritePreferencesData(
+        clubs: {...?existing?.clubs, ...data.clubs},
+        playerCaseIds: {...?existing?.playerCaseIds, ...data.playerCaseIds},
+      );
+      transaction.set(_favoritesDocument, {
+        'clubs': merged.clubs.toList()..sort(),
+        'playerCaseIds': merged.playerCaseIds.toList()..sort(),
+        'schemaVersion': 1,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return merged;
     });
   }
 

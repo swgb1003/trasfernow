@@ -23,8 +23,13 @@ void main() {
     await notifier.initializationComplete;
 
     expect(cloud.favoriteLoads, 0);
-    expect(cloud.favorites?.clubs, {'Liverpool'});
-    expect(cloud.favorites?.playerCaseIds, {'isak-liverpool'});
+    expect(cloud.favoriteMerges, 1);
+    expect(cloud.favorites?.clubs, {'Chelsea', 'Liverpool'});
+    expect(cloud.favorites?.playerCaseIds, {
+      'garnacho-chelsea',
+      'isak-liverpool',
+    });
+    expect(notifier.state.clubs, {'Chelsea', 'Liverpool'});
     expect(prefs.getBool('cloudSync.favorites.test-user'), isTrue);
     expect(prefs.getBool('cloudSync.favorites.pending.test-user'), isFalse);
     notifier.dispose();
@@ -128,6 +133,7 @@ class _FakeUserPreferencesRepository implements UserPreferencesRepository {
   NotificationPreferencesData? notifications;
   bool failWrites = false;
   int favoriteLoads = 0;
+  int favoriteMerges = 0;
 
   @override
   String get userId => 'test-user';
@@ -141,6 +147,19 @@ class _FakeUserPreferencesRepository implements UserPreferencesRepository {
   @override
   Future<NotificationPreferencesData?> loadNotifications() async {
     return notifications;
+  }
+
+  @override
+  Future<FavoritePreferencesData> mergeFavorites(
+    FavoritePreferencesData data,
+  ) async {
+    if (failWrites) throw StateError('offline');
+    favoriteMerges += 1;
+    favorites = FavoritePreferencesData(
+      clubs: {...?favorites?.clubs, ...data.clubs},
+      playerCaseIds: {...?favorites?.playerCaseIds, ...data.playerCaseIds},
+    );
+    return favorites!;
   }
 
   @override

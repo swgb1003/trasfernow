@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:transfer_now/app/app.dart';
+import 'package:transfer_now/data/account_service.dart';
+import 'package:transfer_now/data/firebase_service_providers.dart';
 import 'package:transfer_now/data/onboarding_preferences.dart';
 import 'package:transfer_now/data/shared_preferences_provider.dart';
 import 'package:transfer_now/data/dummy_transfer_cases.dart';
@@ -20,6 +22,7 @@ import 'package:transfer_now/widgets/official_reveal_overlay.dart';
 Future<void> _pumpApp(
   WidgetTester tester, {
   TransferCaseRepository? repository,
+  AccountService? accountService,
 }) async {
   SharedPreferences.setMockInitialValues({
     OnboardingPreferences.completedKey: true,
@@ -31,6 +34,8 @@ Future<void> _pumpApp(
         sharedPreferencesProvider.overrideWithValue(prefs),
         if (repository != null)
           transferCaseRepositoryProvider.overrideWithValue(repository),
+        if (accountService != null)
+          accountServiceProvider.overrideWithValue(accountService),
       ],
       child: const TransferNowApp(),
     ),
@@ -284,6 +289,25 @@ void main() {
     expect(find.text('Victor Osimhen'), findsNothing);
   });
 
+  testWidgets('MY screen links guest data to a Google account', (
+    WidgetTester tester,
+  ) async {
+    final accountService = _FakeAccountService();
+    await _pumpApp(tester, accountService: accountService);
+
+    await tester.tap(find.text('MY'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ゲストユーザー'), findsOneWidget);
+    expect(find.text('Googleでデータを引き継ぐ'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('google-link-button')));
+    await tester.pumpAndSettle();
+
+    expect(accountService.calls, 1);
+    expect(find.textContaining('Googleアカウントに連携しました'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'club page lists IN/OUT candidates and is reachable from favorites and detail screen',
     (WidgetTester tester) async {
@@ -333,6 +357,16 @@ void main() {
 
       await tester.tap(find.text('MY'));
       await tester.pumpAndSettle();
+      final myScrollable = find.descendant(
+        of: find.byKey(const ValueKey('my-content-list')),
+        matching: find.byType(Scrollable),
+      ).first;
+      await tester.scrollUntilVisible(
+        find.text('通知設定'),
+        160,
+        scrollable: myScrollable,
+      );
+      await tester.ensureVisible(find.text('通知設定'));
       await tester.tap(find.text('通知設定'));
       await tester.pumpAndSettle();
 
@@ -384,6 +418,16 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('remove-club-Chelsea')));
       await tester.pumpAndSettle();
 
+      final myScrollable = find.descendant(
+        of: find.byKey(const ValueKey('my-content-list')),
+        matching: find.byType(Scrollable),
+      ).first;
+      await tester.scrollUntilVisible(
+        find.text('通知設定'),
+        160,
+        scrollable: myScrollable,
+      );
+      await tester.ensureVisible(find.text('通知設定'));
       await tester.tap(find.text('通知設定'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(SwitchListTile, '🔥 BREAKING'));
@@ -408,6 +452,16 @@ void main() {
       expect(find.text('Chelsea'), findsNothing);
       expect(find.text('Arsenal'), findsOneWidget); // untouched, still there
 
+      final restartedMyScrollable = find.descendant(
+        of: find.byKey(const ValueKey('my-content-list')),
+        matching: find.byType(Scrollable),
+      ).first;
+      await tester.scrollUntilVisible(
+        find.text('通知設定'),
+        160,
+        scrollable: restartedMyScrollable,
+      );
+      await tester.ensureVisible(find.text('通知設定'));
       await tester.tap(find.text('通知設定'));
       await tester.pumpAndSettle();
       final breakingSwitch = tester.widget<SwitchListTile>(
@@ -430,5 +484,15 @@ class _FlakyTransferCaseRepository implements TransferCaseRepository {
     final cases = [...dummyTransferCases]
       ..sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
     return Stream.value(cases);
+  }
+}
+
+class _FakeAccountService implements AccountService {
+  int calls = 0;
+
+  @override
+  Future<GoogleAccountLinkResult> linkGoogleAccount() async {
+    calls += 1;
+    return GoogleAccountLinkResult.linkedCurrentUser;
   }
 }

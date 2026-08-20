@@ -6,6 +6,9 @@
     "node": ">=22"
   },
   "scripts": {
+    "test": "node --test test/*.test.js",
+    "audit-api-football": "node audit-api-football.js",
+    "import-api-football": "node import-api-football.js",
     "seed": "node seed.js",
     "sync-assets": "node sync-assets.js"
   },

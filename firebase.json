@@ -1,4 +1,13 @@
 {
+  "auth": {
+    "providers": {
+      "anonymous": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "TRANSFER NOW",
+        "supportEmail": "sw.gb.1003@gmail.com"
+      }
+    }
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"

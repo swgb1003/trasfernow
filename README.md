@@ -38,4 +38,5 @@ Firebase接続時は匿名認証後にFirestoreの`transferCases`をリアルタ
 描画するオリジナルモノグラムを使用するため、画像表示にFirebase StorageやBlaze
 プランは不要。許諾済みの実画像へ差し替える場合だけStorage同期を任意で利用できる。
 
-外部Football API、生成AI、FCMを送信するCloud Functionsはまだ未接続。
+API-Footballはdry-run／非公開ステージング取込まで実装済み。生成AI、定期取得、
+FCMを送信するCloud Functionsはまだ未接続。
