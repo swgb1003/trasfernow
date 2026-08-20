@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/ai/ai_screen.dart';
+import '../features/club/club_screen.dart';
 import '../features/detail/detail_screen.dart';
 import '../features/live/live_screen.dart';
 import '../features/market/market_screen.dart';
 import '../features/my/my_screen.dart';
+import '../features/notifications/notification_settings_screen.dart';
 import '../features/search/search_screen.dart';
 import 'root_shell.dart';
 
@@ -53,6 +55,18 @@ GoRouter buildAppRouter() {
         parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) =>
             DetailScreen(caseId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/club/:name',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => ClubScreen(
+          clubName: Uri.decodeComponent(state.pathParameters['name']!),
+        ),
+      ),
+      GoRoute(
+        path: '/notifications',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const NotificationSettingsScreen(),
       ),
     ],
   );

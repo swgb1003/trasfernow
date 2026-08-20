@@ -32,6 +32,8 @@ class MyScreen extends ConsumerWidget {
               for (final club in favorites.clubs)
                 _ClubChip(
                   club: club,
+                  onTap: () =>
+                      context.push('/club/${Uri.encodeComponent(club)}'),
                   onRemove: () =>
                       ref.read(favoritesProvider.notifier).toggleClub(club),
                 ),
@@ -60,7 +62,11 @@ class MyScreen extends ConsumerWidget {
             label: 'ウォッチリスト',
             trailingText: '$watchCount',
           ),
-          const _MenuTile(icon: Icons.notifications_outlined, label: '通知設定'),
+          _MenuTile(
+            icon: Icons.notifications_outlined,
+            label: '通知設定',
+            onTap: () => context.push('/notifications'),
+          ),
           const _MenuTile(icon: Icons.settings_outlined, label: 'アプリ設定'),
           const _MenuTile(icon: Icons.help_outline, label: 'ヘルプ / お問い合わせ'),
         ],
@@ -250,49 +256,57 @@ class _FavoritesSection extends StatelessWidget {
 }
 
 class _ClubChip extends StatelessWidget {
-  const _ClubChip({required this.club, required this.onRemove});
+  const _ClubChip({
+    required this.club,
+    required this.onTap,
+    required this.onRemove,
+  });
 
   final String club;
+  final VoidCallback onTap;
   final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 64,
-      child: Column(
-        children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: AppColors.card,
-                child: Text(
-                  club.isNotEmpty ? club[0] : '?',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: AppColors.card,
+                  child: Text(
+                    club.isNotEmpty ? club[0] : '?',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
-              ),
-              Positioned(
-                top: -2,
-                right: -2,
-                child: _RemoveBadge(
-                  key: ValueKey('remove-club-$club'),
-                  onTap: onRemove,
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: _RemoveBadge(
+                    key: ValueKey('remove-club-$club'),
+                    onTap: onRemove,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            club,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11),
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              club,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -413,11 +427,17 @@ class _RemoveBadge extends StatelessWidget {
 }
 
 class _MenuTile extends StatelessWidget {
-  const _MenuTile({required this.icon, required this.label, this.trailingText});
+  const _MenuTile({
+    required this.icon,
+    required this.label,
+    this.trailingText,
+    this.onTap,
+  });
 
   final IconData icon;
   final String label;
   final String? trailingText;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -438,7 +458,7 @@ class _MenuTile extends StatelessWidget {
           const Icon(Icons.chevron_right, color: AppColors.textMuted),
         ],
       ),
-      onTap: () {},
+      onTap: onTap,
     );
   }
 }

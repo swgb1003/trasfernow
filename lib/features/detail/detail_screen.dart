@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/format/relative_time.dart';
 import '../../core/theme/app_colors.dart';
@@ -7,6 +8,7 @@ import '../../data/favorites_provider.dart';
 import '../../data/transfer_case_providers.dart';
 import '../../models/transfer_case.dart';
 import '../../models/transfer_status.dart';
+import '../../widgets/ai_summary_card.dart';
 import '../../widgets/official_reveal_overlay.dart';
 import '../../widgets/probability_gauge.dart';
 import '../../widgets/status_badge.dart';
@@ -80,6 +82,7 @@ class _DetailContent extends ConsumerWidget {
         ],
       ),
       body: ListView(
+        key: const ValueKey('detail-content-list'),
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           _ClubRoute(transferCase: transferCase),
@@ -122,6 +125,8 @@ class _DetailContent extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           _Timeline(events: transferCase.timeline),
+          const SizedBox(height: 28),
+          AiSummaryCard(transferCase: transferCase),
           const SizedBox(height: 28),
           Text(
             '情報源(報道数:${transferCase.sources.length})',
@@ -175,24 +180,28 @@ class _ClubBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 26,
-          backgroundColor: highlighted
-              ? AppColors.breaking.withValues(alpha: 0.15)
-              : AppColors.surface,
-          child: Text(
-            name.isNotEmpty ? name[0] : '?',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: highlighted ? AppColors.breaking : AppColors.textPrimary,
+    return GestureDetector(
+      onTap: () => context.push('/club/${Uri.encodeComponent(name)}'),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 26,
+            backgroundColor: highlighted
+                ? AppColors.breaking.withValues(alpha: 0.15)
+                : AppColors.surface,
+            child: Text(
+              name.isNotEmpty ? name[0] : '?',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color:
+                    highlighted ? AppColors.breaking : AppColors.textPrimary,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(name, style: const TextStyle(fontSize: 12)),
-      ],
+          const SizedBox(height: 6),
+          Text(name, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
     );
   }
 }

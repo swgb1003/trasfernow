@@ -47,6 +47,10 @@ dependencies:
   # Date formatting for timeline / "10分前" style relative time
   intl: ^0.19.0
 
+  # Local push-style notifications (§15) — no backend yet, so these are
+  # user-triggered simulations, not server-sent pushes.
+  flutter_local_notifications: ^19.5.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

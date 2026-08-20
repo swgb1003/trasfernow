@@ -4,7 +4,7 @@ Flutterによるサッカー移籍情報アプリ。仕様の一次情報は [do
 
 ## 現在のフェーズ
 
-開発方針(SPEC.md §36)通り、**バックエンド・外部APIは未接続**。全画面が [lib/data/dummy_transfer_cases.dart](lib/data/dummy_transfer_cases.dart) の12件のダミーデータのみで動作している。AI REPORTER画面も生成AIではなく、[lib/data/ai_reporter_engine.dart](lib/data/ai_reporter_engine.dart) のルールベースのキーワードマッチング。ダミーデータに実在の選手名を使っているが、移籍状況(ステータス・成立可能性・タイムライン)はすべて架空。
+開発方針(SPEC.md §36)通り、**バックエンド・外部APIは未接続**。全画面が [lib/data/dummy_transfer_cases.dart](lib/data/dummy_transfer_cases.dart) の12件のダミーデータのみで動作している。AI REPORTER画面も生成AIではなく、[lib/data/ai_reporter_engine.dart](lib/data/ai_reporter_engine.dart) のルールベースのキーワードマッチング。プッシュ通知([notification_service.dart](lib/data/notification_service.dart))も同様に、サーバー送信ではなく`flutter_local_notifications`によるローカル通知シミュレーション(通知設定画面の「テスト」ボタンでユーザーが手動発火する)。ダミーデータに実在の選手名を使っているが、移籍状況(ステータス・成立可能性・タイムライン)はすべて架空。
 
 ## コマンド
 
@@ -40,6 +40,7 @@ lib/
 1. `lib/features/<name>/` にディレクトリを作り画面を実装
 2. [lib/app/router.dart](lib/app/router.dart) の `buildAppRouter()` にルートを追加
 3. ボトムナビに出す場合は [lib/app/root_shell.dart](lib/app/root_shell.dart) の `_destinations` にも追加
+4. ボトムナビに出さず`/case/:id`のように詳細ページとしてpushする場合は `parentNavigatorKey: rootNavigatorKey` を付ける(付けないとシェルの中のナビゲータにネストされ、ボトムナビが消えない)。パスパラメータにクラブ名など空白を含みうる文字列を使う場合は `Uri.encodeComponent` / `Uri.decodeComponent` で往復させる(例: [club_screen.dart](lib/features/club/club_screen.dart) への `/club/:name` 遷移)。
 
 ### 色・スタイルを使う
 
@@ -53,4 +54,9 @@ lib/
 - **`context.push()` 直後は1回空の `pump()` を挟む**: go_routerの画面遷移トランジションは、時間を指定した`pump(duration)`だけだと開始前のフレームを拾えないことがある。`await tester.pump(); await tester.pump(duration);` の2段階にすると安定する。
 - **`find.text()` の文字列重複に注意**: 同じ文字列が別の場所でも使われていないか確認する(例: `TransferCase.probabilityLabel` が100%のとき返す `'OFFICIAL'` と、OFFICIAL演出オーバーレイの見出し文字列が衝突した)。曖昧な場合は `find.byType()` や `find.textContaining()` で一意に絞る。
 - **`showModalBottomSheet`の中身は`MediaQuery.size.height`から自前でmaxHeightを計算しない**: シートの実際の高さは`isScrollControlled`の指定や画面サイズによって変わり、自前計算とズレるとオーバーフローする(実際に発生した)。`isScrollControlled: true` を指定した上で、可変長リスト部分は`ConstrainedBox`ではなく`Flexible`にラップし、親から降りてくる実際の制約に従わせる。
-- **長いリストを`ListView(children:[...])`でテストする場合は`scrollUntilVisible`→`ensureVisible`の2段階にする**: 対象がビューポート外だと`find`で見つからず(`.builder`でなくてもスライバーは遅延マウントされる)、`scrollUntilVisible`だけだと要素の中心が可視領域の外に残ることがありタップが外れる(シートのバリアに当たって閉じてしまう)。`scrollUntilVisible`で存在を確定させた後、`ensureVisible`で完全に可視領域内へ寄せてからタップする。
+- **長いリストを`ListView(children:[...])`でテストする場合は`scrollUntilVisible`→`ensureVisible`の2段階にする**: 対象がビューポート外だと`find`で見つからず(`.builder`でなくてもスライバーは遅延マウントされる)、`scrollUntilVisible`だけだと要素の中心が可視領域の外に残ることがありタップが外れる(シートのバリアに当たって閉じてしまう)。`scrollUntilVisible`で存在を確定させた後、`ensureVisible`で完全に可視領域内へ寄せてからタップする。テスト用ビューポートは800×600固定なので、画面下部のボタンは`tap()`前に`ensureVisible`が必要になることが多い。
+- **ネイティブプラグイン(`flutter_local_notifications`など)はウィジェットテストで実際には呼び出せない**: プラットフォームチャンネル未実装のため呼び出すと例外になる(`MissingPluginException`または内部の`LateInitializationError`)。[notification_service.dart](lib/data/notification_service.dart)のように呼び出し側で`try/catch`して失敗を戻り値で返す設計にしておくと、テストでは「失敗時にクラッシュせずエラーメッセージを出す」ところまでは検証できる。実際に通知が飛ぶかどうかは実機の`flutter run`でしか確認できない。
+
+## ネイティブ設定が必要な依存を追加したとき
+
+`flutter pub add`しただけでは動かないパッケージがある(`flutter_local_notifications`が実例)。追加時にそのパッケージの`android/build.gradle`を読み、`coreLibraryDesugaringEnabled`や`compileSdk`の要求がないか確認する。ある場合は[android/app/build.gradle.kts](android/app/build.gradle.kts)にも同じ設定(`isCoreLibraryDesugaringEnabled = true` + `coreLibraryDesugaring`依存)を追加しないと、実機ビルド時に「requires core library desugaring to be enabled for :app」のようなエラーになる。Android 13+ (API33)以降の権限が要る機能は[AndroidManifest.xml](android/app/src/main/AndroidManifest.xml)に`<uses-permission>`を追加する(通知なら`POST_NOTIFICATIONS`)。この手のネイティブ設定変更はホットリロードでは反映されないので、`flutter run`をやり直す必要がある。

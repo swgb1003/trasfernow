@@ -73,6 +73,25 @@ void main() {
 
     expect(find.text('移籍タイムライン'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    // The AI要約 card sits further down the page than the initial viewport.
+    final detailScrollable = find.descendant(
+      of: find.byKey(const ValueKey('detail-content-list')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.text('AI SUMMARY'),
+      200,
+      scrollable: detailScrollable,
+    );
+    expect(find.text('現在の状況'), findsOneWidget);
+
+    // The summary card's button hands off to the AI REPORTER tab.
+    await tester.ensureVisible(find.text('もっと詳しくAIに質問する'));
+    await tester.pump();
+    await tester.tap(find.text('もっと詳しくAIに質問する'));
+    await tester.pumpAndSettle();
+    expect(find.text('AI REPORTER'), findsOneWidget);
   });
 
   testWidgets('OFFICIAL case shows the reveal overlay and it dismisses', (
@@ -167,4 +186,83 @@ void main() {
 
     expect(find.text('Victor Osimhen'), findsNothing);
   });
+
+  testWidgets(
+    'club page lists IN/OUT candidates and is reachable from favorites and detail screen',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
+      await tester.pumpAndSettle();
+
+      // From MY page: tap the seeded "Man Utd" favorite club chip.
+      await tester.tap(find.text('MY'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Man Utd'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('IN ('), findsOneWidget);
+      expect(find.textContaining('OUT ('), findsOneWidget);
+      // IN tab is selected by default: Everton → Man Utd is a rumour.
+      expect(find.text('Jarrad Branthwaite'), findsOneWidget);
+
+      await tester.tap(find.textContaining('OUT ('));
+      await tester.pumpAndSettle();
+      // Man Utd → Chelsea (Garnacho) shows up as an OUT candidate.
+      expect(find.text('Alejandro Garnacho'), findsOneWidget);
+
+      // The star icon here toggles the same favorites state as MY page.
+      expect(find.byIcon(Icons.star), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.star));
+      await tester.pump();
+      expect(find.byIcon(Icons.star_border), findsOneWidget);
+
+      // Tapping the OUT row opens that case's detail screen.
+      await tester.tap(find.text('Alejandro Garnacho'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Alejandro Garnacho'), findsWidgets);
+
+      // From there, tapping the destination club badge opens Chelsea's
+      // club page, which should list Garnacho among its IN candidates.
+      await tester.tap(find.text('Chelsea'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining('IN (2)'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'notification settings toggle categories and the test buttons fail gracefully without a device',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('MY'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('通知設定'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('🔥 BREAKING'), findsOneWidget);
+      expect(find.text('🔥 BREAKINGを送る'), findsOneWidget);
+
+      // Turning a category off disables its test button.
+      await tester.tap(find.widgetWithText(SwitchListTile, '🔥 BREAKING'));
+      await tester.pump();
+      final breakingButton = tester.widget<OutlinedButton>(
+        find.ancestor(
+          of: find.text('🔥 BREAKINGを送る'),
+          matching: find.byType(OutlinedButton),
+        ),
+      );
+      expect(breakingButton.onPressed, isNull);
+
+      // The plugin has no platform implementation in the test harness, so
+      // this must fail gracefully (no crash) rather than throw.
+      await tester.ensureVisible(find.text('🤝 AGREEMENTを送る'));
+      await tester.pump();
+      await tester.tap(find.text('🤝 AGREEMENTを送る'));
+      await tester.pump();
+      expect(find.textContaining('通知の送信に失敗しました'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
