@@ -6,6 +6,8 @@ Flutterによるサッカー移籍情報アプリ。仕様の一次情報は [do
 
 開発方針(SPEC.md §36)通り、**バックエンド・外部APIは未接続**。全画面が [lib/data/dummy_transfer_cases.dart](lib/data/dummy_transfer_cases.dart) の12件のダミーデータのみで動作している。AI REPORTER画面も生成AIではなく、[lib/data/ai_reporter_engine.dart](lib/data/ai_reporter_engine.dart) のルールベースのキーワードマッチング。プッシュ通知([notification_service.dart](lib/data/notification_service.dart))も同様に、サーバー送信ではなく`flutter_local_notifications`によるローカル通知シミュレーション(通知設定画面の「テスト」ボタンでユーザーが手動発火する)。ダミーデータに実在の選手名を使っているが、移籍状況(ステータス・成立可能性・タイムライン)はすべて架空。
 
+お気に入り([favorites_provider.dart](lib/data/favorites_provider.dart))と通知設定([notification_settings_provider.dart](lib/data/notification_settings_provider.dart))は`shared_preferences`でローカル永続化済み(バックエンドがある訳ではなく端末内保存)。両プロバイダとも`sharedPreferencesProvider`([shared_preferences_provider.dart](lib/data/shared_preferences_provider.dart))経由で`SharedPreferences`を受け取る設計で、これは`main()`で`ProviderScope`の`overrides`にセットしている(`runApp`前に`await SharedPreferences.getInstance()`が要るため`main`は`async`)。
+
 ## コマンド
 
 ```
@@ -56,6 +58,8 @@ lib/
 - **`showModalBottomSheet`の中身は`MediaQuery.size.height`から自前でmaxHeightを計算しない**: シートの実際の高さは`isScrollControlled`の指定や画面サイズによって変わり、自前計算とズレるとオーバーフローする(実際に発生した)。`isScrollControlled: true` を指定した上で、可変長リスト部分は`ConstrainedBox`ではなく`Flexible`にラップし、親から降りてくる実際の制約に従わせる。
 - **長いリストを`ListView(children:[...])`でテストする場合は`scrollUntilVisible`→`ensureVisible`の2段階にする**: 対象がビューポート外だと`find`で見つからず(`.builder`でなくてもスライバーは遅延マウントされる)、`scrollUntilVisible`だけだと要素の中心が可視領域の外に残ることがありタップが外れる(シートのバリアに当たって閉じてしまう)。`scrollUntilVisible`で存在を確定させた後、`ensureVisible`で完全に可視領域内へ寄せてからタップする。テスト用ビューポートは800×600固定なので、画面下部のボタンは`tap()`前に`ensureVisible`が必要になることが多い。
 - **ネイティブプラグイン(`flutter_local_notifications`など)はウィジェットテストで実際には呼び出せない**: プラットフォームチャンネル未実装のため呼び出すと例外になる(`MissingPluginException`または内部の`LateInitializationError`)。[notification_service.dart](lib/data/notification_service.dart)のように呼び出し側で`try/catch`して失敗を戻り値で返す設計にしておくと、テストでは「失敗時にクラッシュせずエラーメッセージを出す」ところまでは検証できる。実際に通知が飛ぶかどうかは実機の`flutter run`でしか確認できない。
+- **`sharedPreferencesProvider`のように起動時に`override`が要るプロバイダを使う画面は、テストでも`ProviderScope(overrides:[...])`が必須**: `pumpWidget(const ProviderScope(child: TransferNowApp()))`のように素の`ProviderScope`だとプロバイダ生成時に`UnimplementedError`で落ちる。`SharedPreferences.setMockInitialValues({})` → `SharedPreferences.getInstance()` → `overrides: [sharedPreferencesProvider.overrideWithValue(prefs)]`という組み立てをテストファイル内の共通ヘルパー(`_pumpApp`)にまとめて全テストで使い回す。
+- **同じ型のウィジェットを`pumpWidget`で2回流しても`State`は再生成されない**: 「アプリ再起動」をテストで再現するために`TransferNowApp`を2回`pumpWidget`しても、Flutterは同じ位置・同じ型のウィジェットとみなして既存の`State`(`late final GoRouter`が保持する画面遷移状態ごと)を使い回してしまい、意図通りに初期状態へ戻らない。`pumpWidget(const SizedBox.shrink())`のような無関係なウィジェットを一度挟んでから次のウィジェットをpumpすると、古いツリーが確実に破棄されて`initState`からやり直される。
 
 ## ネイティブ設定が必要な依存を追加したとき
 

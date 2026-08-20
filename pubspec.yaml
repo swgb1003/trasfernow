@@ -51,6 +51,9 @@ dependencies:
   # user-triggered simulations, not server-sent pushes.
   flutter_local_notifications: ^19.5.0
 
+  # Local persistence for favorites / notification settings (no backend yet).
+  shared_preferences: ^2.5.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

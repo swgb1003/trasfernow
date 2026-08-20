@@ -1,18 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:transfer_now/app/app.dart';
+import 'package:transfer_now/data/shared_preferences_provider.dart';
 import 'package:transfer_now/widgets/official_reveal_overlay.dart';
+
+/// Every screen reads `favoritesProvider` / `notificationSettingsProvider`,
+/// both of which require `sharedPreferencesProvider` to be overridden.
+/// `SharedPreferences.setMockInitialValues` gives an in-memory
+/// implementation that works without a platform channel.
+Future<void> _pumpApp(WidgetTester tester) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const TransferNowApp(),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
 
 void main() {
   testWidgets('LIVE screen shows the top breaking transfer case', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: TransferNowApp()),
-    );
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     expect(find.text('LIVE'), findsWidgets);
     expect(find.text('🔥 BREAKING'), findsOneWidget);
@@ -25,8 +40,7 @@ void main() {
   testWidgets('MARKET screen renders overview stats and trending list', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     await tester.tap(find.text('MARKET'));
     await tester.pumpAndSettle();
@@ -42,8 +56,7 @@ void main() {
   testWidgets('AI screen answers a suggested question about a club', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     await tester.tap(find.text('AI'));
     await tester.pumpAndSettle();
@@ -59,8 +72,7 @@ void main() {
   testWidgets('detail screen timeline animates in without errors', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     // Top BREAKING card (finalStage, not OFFICIAL) opens the detail screen.
     await tester.tap(find.text('🔥 BREAKING'));
@@ -97,8 +109,7 @@ void main() {
   testWidgets('OFFICIAL case shows the reveal overlay and it dismisses', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     await tester.tap(find.text('SEARCH'));
     await tester.pumpAndSettle();
@@ -128,8 +139,7 @@ void main() {
   testWidgets('MY screen manages favorite clubs and players', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
-    await tester.pumpAndSettle();
+    await _pumpApp(tester);
 
     await tester.tap(find.text('MY'));
     await tester.pumpAndSettle();
@@ -190,8 +200,7 @@ void main() {
   testWidgets(
     'club page lists IN/OUT candidates and is reachable from favorites and detail screen',
     (WidgetTester tester) async {
-      await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
-      await tester.pumpAndSettle();
+      await _pumpApp(tester);
 
       // From MY page: tap the seeded "Man Utd" favorite club chip.
       await tester.tap(find.text('MY'));
@@ -233,8 +242,7 @@ void main() {
   testWidgets(
     'notification settings toggle categories and the test buttons fail gracefully without a device',
     (WidgetTester tester) async {
-      await tester.pumpWidget(const ProviderScope(child: TransferNowApp()));
-      await tester.pumpAndSettle();
+      await _pumpApp(tester);
 
       await tester.tap(find.text('MY'));
       await tester.pumpAndSettle();
@@ -263,6 +271,60 @@ void main() {
       await tester.pump();
       expect(find.textContaining('通知の送信に失敗しました'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'favorites and notification settings persist across a simulated app restart',
+    (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+
+      // "First launch": remove a favorite club, turn off BREAKING notifications.
+      var prefs = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+          child: const TransferNowApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('MY'));
+      await tester.pumpAndSettle();
+      expect(find.text('Chelsea'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('remove-club-Chelsea')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('通知設定'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(SwitchListTile, '🔥 BREAKING'));
+      await tester.pump();
+
+      // "Restart": pumping a new TransferNowApp directly would just update
+      // the existing State in place (same widget type/position), keeping
+      // its already-navigated GoRouter alive. Pump a throwaway widget first
+      // so the old tree — router and all — is fully disposed.
+      await tester.pumpWidget(const SizedBox.shrink());
+      prefs = await SharedPreferences.getInstance();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+          child: const TransferNowApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('MY'));
+      await tester.pumpAndSettle();
+      expect(find.text('Chelsea'), findsNothing);
+      expect(find.text('Arsenal'), findsOneWidget); // untouched, still there
+
+      await tester.tap(find.text('通知設定'));
+      await tester.pumpAndSettle();
+      final breakingSwitch = tester.widget<SwitchListTile>(
+        find.widgetWithText(SwitchListTile, '🔥 BREAKING'),
+      );
+      expect(breakingSwitch.value, isFalse);
     },
   );
 }
