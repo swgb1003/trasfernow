@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme/app_colors.dart';
+import '../models/club.dart';
+import 'entity_image.dart';
 
 /// Full-screen celebration shown once when opening an OFFICIAL case:
 /// "OFFICIAL" pops center screen, then the player card slides from the
@@ -18,8 +20,8 @@ class OfficialRevealOverlay extends StatefulWidget {
   });
 
   final String playerName;
-  final String fromClub;
-  final String toClub;
+  final Club fromClub;
+  final Club toClub;
   final VoidCallback onFinished;
 
   @override
@@ -85,9 +87,9 @@ class _OfficialRevealOverlayState extends State<OfficialRevealOverlay>
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          final officialOpacity =
-              (officialFadeIn.value * (1 - officialFadeOut.value))
-                  .clamp(0.0, 1.0);
+          final officialOpacity = (officialFadeIn.value *
+                  (1 - officialFadeOut.value))
+              .clamp(0.0, 1.0);
           final revealT = transferReveal.value.clamp(0.0, 1.0);
 
           return Opacity(
@@ -128,7 +130,7 @@ class _OfficialRevealOverlayState extends State<OfficialRevealOverlay>
                               children: [
                                 Transform.translate(
                                   offset: Offset((1 - revealT) * -70, 0),
-                                  child: _ClubChip(name: widget.fromClub),
+                                  child: _ClubChip(club: widget.fromClub),
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -143,7 +145,7 @@ class _OfficialRevealOverlayState extends State<OfficialRevealOverlay>
                                 Transform.translate(
                                   offset: Offset((1 - revealT) * 70, 0),
                                   child: _ClubChip(
-                                    name: widget.toClub,
+                                    club: widget.toClub,
                                     highlighted: true,
                                   ),
                                 ),
@@ -151,7 +153,7 @@ class _OfficialRevealOverlayState extends State<OfficialRevealOverlay>
                             ),
                             const SizedBox(height: 18),
                             Text(
-                              'WELCOME TO ${widget.toClub.toUpperCase()}',
+                              'WELCOME TO ${widget.toClub.name.toUpperCase()}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
@@ -195,32 +197,19 @@ class _OfficialRevealOverlayState extends State<OfficialRevealOverlay>
 }
 
 class _ClubChip extends StatelessWidget {
-  const _ClubChip({required this.name, this.highlighted = false});
+  const _ClubChip({required this.club, this.highlighted = false});
 
-  final String name;
+  final Club club;
   final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: highlighted
-              ? AppColors.official.withValues(alpha: 0.18)
-              : AppColors.surface,
-          child: Text(
-            name.isNotEmpty ? name[0] : '?',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-              color: highlighted ? AppColors.official : AppColors.textPrimary,
-            ),
-          ),
-        ),
+        ClubCrest(club: club, size: 56, circular: true),
         const SizedBox(height: 6),
         Text(
-          name,
+          club.name,
           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
       ],

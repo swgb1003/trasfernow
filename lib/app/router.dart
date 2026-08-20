@@ -8,6 +8,7 @@ import '../features/live/live_screen.dart';
 import '../features/market/market_screen.dart';
 import '../features/my/my_screen.dart';
 import '../features/notifications/notification_settings_screen.dart';
+import '../features/onboarding/onboarding_screen.dart';
 import '../features/search/search_screen.dart';
 import 'root_shell.dart';
 
@@ -16,13 +17,18 @@ import 'root_shell.dart';
 /// on the instance itself, so a shared singleton would leak the previous
 /// screen's location across independent [TransferNowApp] instances (e.g.
 /// between widget tests, each of which mounts its own app).
-GoRouter buildAppRouter() {
+GoRouter buildAppRouter({String initialLocation = '/live'}) {
   final rootNavigatorKey = GlobalKey<NavigatorState>();
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/live',
+    initialLocation: initialLocation,
     routes: [
+      GoRoute(
+        path: '/onboarding',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (_, __) => const OnboardingScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             RootShell(navigationShell: navigationShell),

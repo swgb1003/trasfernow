@@ -1,21 +1,28 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/transfer_case.dart';
-import 'dummy_transfer_cases.dart';
+import 'firebase_service_providers.dart';
+import 'transfer_case_repository.dart';
 
-/// All known transfer cases, newest update first.
-final transferCasesProvider = Provider<List<TransferCase>>((ref) {
-  final cases = [...dummyTransferCases];
-  cases.sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
-  return cases;
+final transferCaseRepositoryProvider = Provider<TransferCaseRepository>((ref) {
+  final firestore = ref.watch(firebaseFirestoreProvider);
+  return firestore == null
+      ? const DummyTransferCaseRepository()
+      : FirestoreTransferCaseRepository(firestore);
 });
 
-final transferCaseByIdProvider = Provider.family<TransferCase?, String>(
-  (ref, id) {
-    final cases = ref.watch(transferCasesProvider);
-    for (final c in cases) {
-      if (c.id == id) return c;
-    }
-    return null;
-  },
-);
+/// All known transfer cases, newest update first. See SPEC.md §27, §28.
+final transferCasesProvider = StreamProvider<List<TransferCase>>((ref) {
+  return ref.watch(transferCaseRepositoryProvider).watchTransferCases();
+});
+
+final transferCaseByIdProvider = FutureProvider.family<TransferCase?, String>((
+  ref,
+  id,
+) async {
+  final cases = await ref.watch(transferCasesProvider.future);
+  for (final c in cases) {
+    if (c.id == id) return c;
+  }
+  return null;
+});

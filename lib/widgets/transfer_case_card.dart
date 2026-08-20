@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/format/relative_time.dart';
 import '../core/theme/app_colors.dart';
 import '../models/transfer_case.dart';
+import 'entity_image.dart';
 
 /// A row in the LIVE feed / club IN-OUT lists. See SPEC.md §5.1, §17.
 class TransferCaseCard extends StatelessWidget {
@@ -26,9 +27,10 @@ class TransferCaseCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: isBreaking
-              ? AppColors.breaking.withValues(alpha: 0.6)
-              : AppColors.cardBorder,
+          color:
+              isBreaking
+                  ? AppColors.breaking.withValues(alpha: 0.6)
+                  : AppColors.cardBorder,
           width: isBreaking ? 1.4 : 1,
         ),
       ),
@@ -77,14 +79,7 @@ class TransferCaseCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: AppColors.surface,
-                    child: Text(
-                      transferCase.playerCountryFlag,
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                  ),
+                  PlayerAvatar(transferCase: transferCase),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

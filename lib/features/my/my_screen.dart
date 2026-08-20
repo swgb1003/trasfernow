@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/favorites_provider.dart';
+import '../../data/club_catalog.dart';
 import '../../data/transfer_case_providers.dart';
 import '../../models/transfer_case.dart';
+import '../../widgets/entity_image.dart';
+import '../../widgets/async_content_state.dart';
 
 /// MY画面: お気に入りクラブ / お気に入り選手の管理. See SPEC.md §13, §14, 画面10.
 class MyScreen extends ConsumerWidget {
@@ -14,62 +17,79 @@ class MyScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final favorites = ref.watch(favoritesProvider);
-    final cases = ref.watch(transferCasesProvider);
-    final favoritePlayers =
-        cases.where((c) => favorites.playerCaseIds.contains(c.id)).toList();
+    final casesAsync = ref.watch(transferCasesProvider);
     final watchCount = favorites.clubs.length + favorites.playerCaseIds.length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('MY')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          const _ProfileHeader(),
-          const SizedBox(height: 28),
-          _FavoritesSection(
-            title: 'お気に入りクラブ',
+      body: casesAsync.when(
+        loading: () => const AsyncContentState.loading(),
+        error:
+            (error, _) => AsyncContentState.error(
+              error: error,
+              onRetry: () => ref.invalidate(transferCasesProvider),
+            ),
+        data: (cases) {
+          final favoritePlayers =
+              cases
+                  .where((c) => favorites.playerCaseIds.contains(c.id))
+                  .toList();
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
-              for (final club in favorites.clubs)
-                _ClubChip(
-                  club: club,
-                  onTap: () =>
-                      context.push('/club/${Uri.encodeComponent(club)}'),
-                  onRemove: () =>
-                      ref.read(favoritesProvider.notifier).toggleClub(club),
-                ),
-              _AddChip(onTap: () => _showAddClubSheet(context)),
+              const _ProfileHeader(),
+              const SizedBox(height: 28),
+              _FavoritesSection(
+                title: 'お気に入りクラブ',
+                children: [
+                  for (final club in favorites.clubs)
+                    _ClubChip(
+                      club: club,
+                      onTap:
+                          () => context.push(
+                            '/club/${Uri.encodeComponent(club)}',
+                          ),
+                      onRemove:
+                          () => ref
+                              .read(favoritesProvider.notifier)
+                              .toggleClub(club),
+                    ),
+                  _AddChip(onTap: () => _showAddClubSheet(context)),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _FavoritesSection(
+                title: 'お気に入り選手',
+                children: [
+                  for (final c in favoritePlayers)
+                    _PlayerChip(
+                      transferCase: c,
+                      onTap: () => context.push('/case/${c.id}'),
+                      onRemove:
+                          () => ref
+                              .read(favoritesProvider.notifier)
+                              .togglePlayerCase(c.id),
+                    ),
+                  _AddChip(onTap: () => _showAddPlayerSheet(context)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 32),
+              _MenuTile(
+                icon: Icons.visibility_outlined,
+                label: 'ウォッチリスト',
+                trailingText: '$watchCount',
+              ),
+              _MenuTile(
+                icon: Icons.notifications_outlined,
+                label: '通知設定',
+                onTap: () => context.push('/notifications'),
+              ),
+              const _MenuTile(icon: Icons.settings_outlined, label: 'アプリ設定'),
+              const _MenuTile(icon: Icons.help_outline, label: 'ヘルプ / お問い合わせ'),
             ],
-          ),
-          const SizedBox(height: 24),
-          _FavoritesSection(
-            title: 'お気に入り選手',
-            children: [
-              for (final c in favoritePlayers)
-                _PlayerChip(
-                  transferCase: c,
-                  onTap: () => context.push('/case/${c.id}'),
-                  onRemove: () => ref
-                      .read(favoritesProvider.notifier)
-                      .togglePlayerCase(c.id),
-                ),
-              _AddChip(onTap: () => _showAddPlayerSheet(context)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(height: 32),
-          _MenuTile(
-            icon: Icons.visibility_outlined,
-            label: 'ウォッチリスト',
-            trailingText: '$watchCount',
-          ),
-          _MenuTile(
-            icon: Icons.notifications_outlined,
-            label: '通知設定',
-            onTap: () => context.push('/notifications'),
-          ),
-          const _MenuTile(icon: Icons.settings_outlined, label: 'アプリ設定'),
-          const _MenuTile(icon: Icons.help_outline, label: 'ヘルプ / お問い合わせ'),
-        ],
+          );
+        },
       ),
     );
   }
@@ -80,27 +100,31 @@ void _showAddClubSheet(BuildContext context) {
     context: context,
     backgroundColor: AppColors.surface,
     isScrollControlled: true,
-    constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.of(context).size.height * 0.8,
+    ),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (context) => _AddPickerSheet(
-      title: 'クラブを追加',
-      builder: (context, ref) {
-        final allClubs = ref.watch(allClubsProvider);
-        final favorites = ref.watch(favoritesProvider);
-        return [
-          for (final club in allClubs)
-            CheckboxListTile(
-              value: favorites.clubs.contains(club),
-              title: Text(club),
-              activeColor: AppColors.breaking,
-              onChanged: (_) =>
-                  ref.read(favoritesProvider.notifier).toggleClub(club),
-            ),
-        ];
-      },
-    ),
+    builder:
+        (context) => _AddPickerSheet(
+          title: 'クラブを追加',
+          builder: (context, ref) {
+            final allClubs = ref.watch(allClubsProvider);
+            final favorites = ref.watch(favoritesProvider);
+            return [
+              for (final club in allClubs)
+                CheckboxListTile(
+                  value: favorites.clubs.contains(club),
+                  title: Text(club),
+                  activeColor: AppColors.breaking,
+                  onChanged:
+                      (_) =>
+                          ref.read(favoritesProvider.notifier).toggleClub(club),
+                ),
+            ];
+          },
+        ),
   );
 }
 
@@ -109,29 +133,42 @@ void _showAddPlayerSheet(BuildContext context) {
     context: context,
     backgroundColor: AppColors.surface,
     isScrollControlled: true,
-    constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.of(context).size.height * 0.8,
+    ),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (context) => _AddPickerSheet(
-      title: '選手を追加',
-      builder: (context, ref) {
-        final cases = ref.watch(transferCasesProvider);
-        final favorites = ref.watch(favoritesProvider);
-        return [
-          for (final c in cases)
-            CheckboxListTile(
-              value: favorites.playerCaseIds.contains(c.id),
-              title: Text(c.playerName),
-              subtitle: Text(c.route),
-              activeColor: AppColors.breaking,
-              onChanged: (_) => ref
-                  .read(favoritesProvider.notifier)
-                  .togglePlayerCase(c.id),
-            ),
-        ];
-      },
-    ),
+    builder:
+        (context) => _AddPickerSheet(
+          title: '選手を追加',
+          builder: (context, ref) {
+            final casesAsync = ref.watch(transferCasesProvider);
+            final favorites = ref.watch(favoritesProvider);
+            final cases = casesAsync.asData?.value;
+            if (cases == null) {
+              return const [
+                Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              ];
+            }
+            return [
+              for (final c in cases)
+                CheckboxListTile(
+                  value: favorites.playerCaseIds.contains(c.id),
+                  title: Text(c.playerName),
+                  subtitle: Text(c.route),
+                  activeColor: AppColors.breaking,
+                  onChanged:
+                      (_) => ref
+                          .read(favoritesProvider.notifier)
+                          .togglePlayerCase(c.id),
+                ),
+            ];
+          },
+        ),
   );
 }
 
@@ -161,11 +198,12 @@ class _AddPickerSheet extends StatelessWidget {
             // MediaQuery-based max height, this can never overflow.
             Flexible(
               child: Consumer(
-                builder: (context, ref, _) => ListView(
-                  key: const ValueKey('add-picker-list'),
-                  shrinkWrap: true,
-                  children: builder(context, ref),
-                ),
+                builder:
+                    (context, ref, _) => ListView(
+                      key: const ValueKey('add-picker-list'),
+                      shrinkWrap: true,
+                      children: builder(context, ref),
+                    ),
               ),
             ),
           ],
@@ -268,6 +306,7 @@ class _ClubChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final clubDetails = ClubCatalog.findByName(club);
     return SizedBox(
       width: 64,
       child: GestureDetector(
@@ -277,17 +316,14 @@ class _ClubChip extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: AppColors.card,
-                  child: Text(
-                    club.isNotEmpty ? club[0] : '?',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textPrimary,
-                    ),
+                if (clubDetails != null)
+                  ClubCrest(club: clubDetails, size: 52, circular: true)
+                else
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundColor: AppColors.card,
+                    child: Text(club.isNotEmpty ? club[0] : '?'),
                   ),
-                ),
                 Positioned(
                   top: -2,
                   right: -2,
@@ -334,14 +370,7 @@ class _PlayerChip extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: AppColors.card,
-                  child: Text(
-                    transferCase.playerCountryFlag,
-                    style: const TextStyle(fontSize: 20),
-                  ),
-                ),
+                PlayerAvatar(transferCase: transferCase, radius: 26),
                 Positioned(
                   top: -2,
                   right: -2,

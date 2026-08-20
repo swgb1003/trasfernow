@@ -1,16 +1,41 @@
-# transfer_now
+# TRANSFER NOW
 
-A new Flutter project.
+Flutterで構築した、サッカー移籍案件をリアルタイム形式で追跡するアプリ。
 
-## Getting Started
+## Documentation
 
-This project is a starting point for a Flutter application.
+- [Product specification](docs/SPEC.md)
+- [Backend development](docs/BACKEND.md)
+- [Screen reference](screen_sample.png)
 
-A few resources to get you started if this is your first Flutter project:
+## Development
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+AndroidのFirebase設定ファイルを配置して起動する:
+
+```powershell
+# Firebase Consoleからダウンロードしたファイルをここへ配置
+# android/app/google-services.json
+flutter run
+```
+
+設定ファイルがない、またはFirebase初期化に失敗した場合は、ダミーRepositoryへ
+自動的に戻る。Web/iOS用のコンパイル時設定テンプレートは
+`config/firebase.example.json`に用意している。
+
+Firebase接続時は匿名認証後にFirestoreの`transferCases`をリアルタイム購読し、
+お気に入り・通知設定の端末キャッシュをユーザー配下へ同期し、FCM端末トークンを
+登録する。開発用の12件を投入する手順、Security Rules、FCM設定は
+[バックエンド開発手順](docs/BACKEND.md)を参照。
+
+選手画像はアプリ内のオリジナル共通イラスト、クラブエンブレムはクラブカラーから
+描画するオリジナルモノグラムを使用するため、画像表示にFirebase StorageやBlaze
+プランは不要。許諾済みの実画像へ差し替える場合だけStorage同期を任意で利用できる。
+
+外部Football API、生成AI、FCMを送信するCloud Functionsはまだ未接続。

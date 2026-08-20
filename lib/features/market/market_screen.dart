@@ -7,6 +7,7 @@ import '../../data/transfer_case_providers.dart';
 import '../../models/transfer_case.dart';
 import '../../models/transfer_status.dart';
 import '../../widgets/ranking_tile.dart';
+import '../../widgets/async_content_state.dart';
 
 /// MARKET dashboard. See SPEC.md §18 移籍市場ダッシュボード / 画面08.
 ///
@@ -27,69 +28,85 @@ class _MarketScreenState extends ConsumerState<MarketScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cases = ref.watch(transferCasesProvider);
+    final casesAsync = ref.watch(transferCasesProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('MARKET')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: List.generate(_tabs.length, (i) {
-                final selected = i == _tabIndex;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 20),
-                  child: GestureDetector(
-                    onTap: () => setState(() => _tabIndex = i),
-                    child: Column(
-                      children: [
-                        Text(
-                          _tabs[i],
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: selected
-                                ? AppColors.textPrimary
-                                : AppColors.textMuted,
+      body: casesAsync.when(
+        loading: () => const AsyncContentState.loading(),
+        error:
+            (error, _) => AsyncContentState.error(
+              error: error,
+              onRetry: () => ref.invalidate(transferCasesProvider),
+            ),
+        data:
+            (cases) => Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: List.generate(_tabs.length, (i) {
+                      final selected = i == _tabIndex;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 20),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _tabIndex = i),
+                          child: Column(
+                            children: [
+                              Text(
+                                _tabs[i],
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color:
+                                      selected
+                                          ? AppColors.textPrimary
+                                          : AppColors.textMuted,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: 2,
+                                width: 28,
+                                color:
+                                    selected
+                                        ? AppColors.breaking
+                                        : Colors.transparent,
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Container(
-                          height: 2,
-                          width: 28,
-                          color:
-                              selected ? AppColors.breaking : Colors.transparent,
+                      );
+                    }),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: switch (_tabIndex) {
+                    0 => _OverviewView(cases: cases),
+                    1 => _RankedListView(
+                      cases: [
+                        ...cases,
+                      ]..sort((a, b) => b.probability.compareTo(a.probability)),
+                      trailingBuilder:
+                          (c) => ('${c.probability}%', c.status.color),
+                    ),
+                    _ => _RankedListView(
+                      cases: [...cases]..sort(
+                        (a, b) => b.estimatedFeeMillionsEur.compareTo(
+                          a.estimatedFeeMillionsEur,
                         ),
-                      ],
+                      ),
+                      trailingBuilder:
+                          (c) => (
+                            '€${c.estimatedFeeMillionsEur.toStringAsFixed(0)}M',
+                            AppColors.textPrimary,
+                          ),
                     ),
-                  ),
-                );
-              }),
+                  },
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: switch (_tabIndex) {
-              0 => _OverviewView(cases: cases),
-              1 => _RankedListView(
-                  cases: [...cases]
-                    ..sort((a, b) => b.probability.compareTo(a.probability)),
-                  trailingBuilder: (c) => ('${c.probability}%', c.status.color),
-                ),
-              _ => _RankedListView(
-                  cases: [...cases]..sort(
-                      (a, b) => b.estimatedFeeMillionsEur
-                          .compareTo(a.estimatedFeeMillionsEur),
-                    ),
-                  trailingBuilder: (c) => (
-                    '€${c.estimatedFeeMillionsEur.toStringAsFixed(0)}M',
-                    AppColors.textPrimary,
-                  ),
-                ),
-            },
-          ),
-        ],
       ),
     );
   }
@@ -102,22 +119,31 @@ class _OverviewView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final earlyStage = cases
-        .where((c) =>
-            c.status == TransferStatus.rumour ||
-            c.status == TransferStatus.interest)
-        .length;
-    final inNegotiation = cases
-        .where((c) =>
-            c.status == TransferStatus.contact ||
-            c.status == TransferStatus.negotiation ||
-            c.status == TransferStatus.bid)
-        .length;
-    final nearAgreement = cases
-        .where((c) =>
-            c.status == TransferStatus.agreement ||
-            c.status == TransferStatus.finalStage)
-        .length;
+    final earlyStage =
+        cases
+            .where(
+              (c) =>
+                  c.status == TransferStatus.rumour ||
+                  c.status == TransferStatus.interest,
+            )
+            .length;
+    final inNegotiation =
+        cases
+            .where(
+              (c) =>
+                  c.status == TransferStatus.contact ||
+                  c.status == TransferStatus.negotiation ||
+                  c.status == TransferStatus.bid,
+            )
+            .length;
+    final nearAgreement =
+        cases
+            .where(
+              (c) =>
+                  c.status == TransferStatus.agreement ||
+                  c.status == TransferStatus.finalStage,
+            )
+            .length;
     final official =
         cases.where((c) => c.status == TransferStatus.official).length;
 
@@ -224,7 +250,10 @@ class _StatCard extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -244,10 +273,7 @@ class _StatCard extends StatelessWidget {
 }
 
 class _RankedListView extends StatelessWidget {
-  const _RankedListView({
-    required this.cases,
-    required this.trailingBuilder,
-  });
+  const _RankedListView({required this.cases, required this.trailingBuilder});
 
   final List<TransferCase> cases;
   final (String, Color) Function(TransferCase) trailingBuilder;

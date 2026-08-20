@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../models/transfer_case.dart';
+import 'entity_image.dart';
 
 enum ClubCaseRowMode { inbound, outbound, completed }
 
@@ -22,8 +23,8 @@ class ClubCaseRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = transferCase;
     final subtitle = switch (mode) {
-      ClubCaseRowMode.inbound => '${c.fromClub} | ${c.playerPosition}',
-      ClubCaseRowMode.outbound => '${c.toClub} | ${c.playerPosition}',
+      ClubCaseRowMode.inbound => '${c.fromClub.name} | ${c.playerPosition}',
+      ClubCaseRowMode.outbound => '${c.toClub.name} | ${c.playerPosition}',
       ClubCaseRowMode.completed => c.route,
     };
 
@@ -34,14 +35,7 @@ class ClubCaseRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: AppColors.surface,
-              child: Text(
-                c.playerCountryFlag,
-                style: const TextStyle(fontSize: 18),
-              ),
-            ),
+            PlayerAvatar(transferCase: c, radius: 20),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -66,7 +60,11 @@ class ClubCaseRow extends StatelessWidget {
               ),
             ),
             if (mode == ClubCaseRowMode.completed)
-              const Icon(Icons.check_circle, color: AppColors.official, size: 20)
+              const Icon(
+                Icons.check_circle,
+                color: AppColors.official,
+                size: 20,
+              )
             else
               Text(
                 '${c.probability}%',

@@ -3,10 +3,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../models/transfer_case.dart';
 
-/// Wraps `flutter_local_notifications`. There is no backend yet (SPEC.md
-/// §36 開発方針), so nothing actually pushes to this app — these are
-/// user-triggered local notifications that simulate what a real push
-/// (SPEC.md §15) would look like once a server exists to send them.
+/// Presents local test notifications and FCM messages received in the
+/// foreground. See SPEC.md §15, §36.
 class NotificationService {
   NotificationService._();
 
@@ -17,7 +15,9 @@ class NotificationService {
 
   Future<void> _ensureInitialized() async {
     if (_initialized) return;
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings();
     await _plugin.initialize(
       const InitializationSettings(android: androidSettings, iOS: iosSettings),
@@ -31,13 +31,19 @@ class NotificationService {
   Future<bool> requestPermission() async {
     try {
       await _ensureInitialized();
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android =
+          _plugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
       if (android != null) {
         return await android.requestNotificationsPermission() ?? false;
       }
-      final ios = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
+      final ios =
+          _plugin
+              .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin
+              >();
       if (ios != null) {
         return await ios.requestPermissions(
               alert: true,
@@ -85,25 +91,36 @@ class NotificationService {
 
   /// 🔥 BREAKING — SPEC.md §15 例:「ChelseaがPLAYER Aへ正式オファー」
   Future<bool> notifyBreaking(TransferCase c) => _show(
-        channelId: 'breaking',
-        channelName: '速報 (BREAKING)',
-        title: '🔥 BREAKING',
-        body: '${c.playerName}: ${c.headline}',
-      );
+    channelId: 'breaking',
+    channelName: '速報 (BREAKING)',
+    title: '🔥 BREAKING',
+    body: '${c.playerName}: ${c.headline}',
+  );
 
   /// 🤝 AGREEMENT — SPEC.md §15 例:「PLAYER BがArsenalと個人合意」
   Future<bool> notifyAgreement(TransferCase c) => _show(
-        channelId: 'agreement',
-        channelName: '合意 (AGREEMENT)',
-        title: '🤝 AGREEMENT',
-        body: '${c.playerName}が${c.toClub}と個人合意',
-      );
+    channelId: 'agreement',
+    channelName: '合意 (AGREEMENT)',
+    title: '🤝 AGREEMENT',
+    body: '${c.playerName}が${c.toClub.name}と個人合意',
+  );
 
   /// ✅ OFFICIAL — SPEC.md §15 例:「PLAYER CのManchester City加入が正式発表」
   Future<bool> notifyOfficial(TransferCase c) => _show(
-        channelId: 'official',
-        channelName: '正式発表 (OFFICIAL)',
-        title: '✅ OFFICIAL',
-        body: '${c.playerName}の${c.toClub}加入が正式発表',
-      );
+    channelId: 'official',
+    channelName: '正式発表 (OFFICIAL)',
+    title: '✅ OFFICIAL',
+    body: '${c.playerName}の${c.toClub.name}加入が正式発表',
+  );
+
+  Future<bool> showRemote({
+    required String title,
+    required String body,
+    String? category,
+  }) => _show(
+    channelId: category ?? 'transfer_updates',
+    channelName: '移籍情報',
+    title: title,
+    body: body,
+  );
 }

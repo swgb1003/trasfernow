@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Static editorial assets are readable by signed-in app users. The app
+    // signs in anonymously before loading Firestore. See SPEC.md §24, §36.
+    match /players/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /club-crests/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Asset publishing is performed only by firebase/sync-assets.js with
+    // Google Application Default Credentials, never from the mobile client.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

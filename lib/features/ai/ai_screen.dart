@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/ai_reporter_engine.dart';
 import '../../data/transfer_case_providers.dart';
 import 'chat_message.dart';
+import '../../widgets/async_content_state.dart';
 
 /// AI REPORTER chat UI. See SPEC.md §10 AI移籍記者 / 画面09.
 ///
@@ -46,7 +47,9 @@ class _AiScreenState extends ConsumerState<AiScreen> {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
-    final engine = AiReporterEngine(ref.read(transferCasesProvider));
+    final cases = ref.read(transferCasesProvider).asData?.value;
+    if (cases == null) return;
+    final engine = AiReporterEngine(cases);
 
     setState(() {
       _messages.add(
@@ -74,49 +77,58 @@ class _AiScreenState extends ConsumerState<AiScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final casesAsync = ref.watch(transferCasesProvider);
     return Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Text('AI REPORTER'),
-            SizedBox(width: 8),
-            _BetaTag(),
-          ],
+          children: const [Text('AI REPORTER'), SizedBox(width: 8), _BetaTag()],
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) => _MessageBubble(
-                message: _messages[index],
-              ),
+      body: casesAsync.when(
+        loading: () => const AsyncContentState.loading(),
+        error:
+            (error, _) => AsyncContentState.error(
+              error: error,
+              onRetry: () => ref.invalidate(transferCasesProvider),
             ),
-          ),
-          if (_messages.length <= 1)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final s in _suggestions)
-                    ActionChip(
-                      label: Text(s, style: const TextStyle(fontSize: 12)),
-                      backgroundColor: AppColors.card,
-                      side: const BorderSide(color: AppColors.cardBorder),
-                      onPressed: () => _send(s),
+        data:
+            (_) => Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    itemCount: _messages.length,
+                    itemBuilder:
+                        (context, index) =>
+                            _MessageBubble(message: _messages[index]),
+                  ),
+                ),
+                if (_messages.length <= 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final s in _suggestions)
+                          ActionChip(
+                            label: Text(
+                              s,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            backgroundColor: AppColors.card,
+                            side: const BorderSide(color: AppColors.cardBorder),
+                            onPressed: () => _send(s),
+                          ),
+                      ],
                     ),
-                ],
-              ),
+                  ),
+                const SizedBox(height: 8),
+                _InputBar(controller: _controller, onSend: _send),
+              ],
             ),
-          const SizedBox(height: 8),
-          _InputBar(controller: _controller, onSend: _send),
-        ],
       ),
     );
   }

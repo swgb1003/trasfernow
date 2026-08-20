@@ -1,0 +1,66 @@
+# TRANSFER NOW
+
+Flutterによるサッカー移籍情報アプリ。仕様の一次情報は [docs/SPEC.md](docs/SPEC.md)、画面モックアップは [screen_sample.png](screen_sample.png)。コード内で仕様の特定機能を実装する際は `// See SPEC.md §NN` の形でセクション番号を参照するコメントを残す(既存コードの慣習に合わせる)。
+
+## 現在のフェーズ
+
+開発方針(SPEC.md §36)に沿って、**Firebase接続層まで実装済み、外部Football APIは未接続**。Firebase識別子が未設定なら [lib/data/dummy_transfer_cases.dart](lib/data/dummy_transfer_cases.dart) の12件で動作し、設定済みなら匿名認証後にCloud Firestoreをリアルタイム購読する。AI REPORTER画面は生成AIではなく、[lib/data/ai_reporter_engine.dart](lib/data/ai_reporter_engine.dart) のルールベースのキーワードマッチング。プッシュ通知はFCM受信・トークン登録まで実装済みだが、サーバー送信処理は未実装。通知設定画面の「テスト」ボタンは引き続き`flutter_local_notifications`によるローカル通知シミュレーション。ダミーデータに実在の選手名を使っているが、移籍状況(ステータス・成立可能性・タイムライン)はすべて架空。
+
+お気に入り([favorites_provider.dart](lib/data/favorites_provider.dart))と通知設定([notification_settings_provider.dart](lib/data/notification_settings_provider.dart))は`shared_preferences`でローカル永続化済み。通知カテゴリはFCMトピックにも同期するが、お気に入り・設定本体のFirestore同期は次工程。両プロバイダとも`sharedPreferencesProvider`([shared_preferences_provider.dart](lib/data/shared_preferences_provider.dart))経由で`SharedPreferences`を受け取る設計で、これは`main()`で`ProviderScope`の`overrides`にセットしている(`runApp`前に`await SharedPreferences.getInstance()`が要るため`main`は`async`)。
+
+## コマンド
+
+```
+flutter pub get      # 依存関係取得
+flutter analyze      # 静的解析(コード変更後は必ず実行)
+flutter test         # ウィジェットテスト(コード変更後は必ず実行)
+flutter run          # 実機/エミュレータ起動
+```
+
+変更を「完了」とみなす前に `flutter analyze` → `flutter test` の両方が通ることを確認する。
+
+## ディレクトリ構成
+
+```
+lib/
+  app/        アプリシェル・ルーティング(go_router, ボトムナビ5タブ)
+  core/       デザインテーマ・カラートークン・日付フォーマット
+  data/       Firebase/ダミーRepository + Riverpodプロバイダ + AI応答エンジン
+  models/     TransferCase, TransferStatus, TimelineEvent, TransferSource
+  features/   live / detail / search / market / ai / my の画面
+  widgets/    共通コンポーネント(カード、バッジ、ゲージ、アニメーション演出)
+```
+
+## 定型作業
+
+### 新しいダミー移籍案件を追加する
+
+[lib/data/dummy_transfer_cases.dart](lib/data/dummy_transfer_cases.dart) の `_buildDummyCases()` にリテラルを1件追加する。`ago(minutes)` / `daysAgo(days)` ヘルパーで `DateTime.now()` からの相対時刻にすること(絶対日付を埋め込むと「情報が古い」ように見えてしまう — 過去に実際指摘された)。`timeline` は古い順、最後の要素が現在のステータスと一致させる。
+
+### 新しい画面を追加する
+
+1. `lib/features/<name>/` にディレクトリを作り画面を実装
+2. [lib/app/router.dart](lib/app/router.dart) の `buildAppRouter()` にルートを追加
+3. ボトムナビに出す場合は [lib/app/root_shell.dart](lib/app/root_shell.dart) の `_destinations` にも追加
+4. ボトムナビに出さず`/case/:id`のように詳細ページとしてpushする場合は `parentNavigatorKey: rootNavigatorKey` を付ける(付けないとシェルの中のナビゲータにネストされ、ボトムナビが消えない)。パスパラメータにクラブ名など空白を含みうる文字列を使う場合は `Uri.encodeComponent` / `Uri.decodeComponent` で往復させる(例: [club_screen.dart](lib/features/club/club_screen.dart) への `/club/:name` 遷移)。
+
+### 色・スタイルを使う
+
+ハードコードせず [lib/core/theme/app_colors.dart](lib/core/theme/app_colors.dart) / [app_theme.dart](lib/core/theme/app_theme.dart) のトークンを参照する。ステータスごとの色は `TransferStatus.color`([transfer_status.dart](lib/models/transfer_status.dart))経由で取得する。
+
+## 既知のハマりどころ(テスト・レイアウト)
+
+- **GoRouterをトップレベル`final`にしない**: `GoRouter`はナビゲーション状態を自分自身に持つミュータブルなオブジェクト。シングルトンにするとテスト間(や複数インスタンス生成時)に画面遷移状態が漏れる。[lib/app/router.dart](lib/app/router.dart) の `buildAppRouter()` のように毎回新しいインスタンスを返す関数にし、`TransferNowApp`(StatefulWidget)の `initState` 相当で1つ生成して保持する。
+- **`IntrinsicHeight` の中で `Stack` を使わない**: `Stack`は確定した高さがないと `size.isFinite` assertionで実機・テストともにクラッシュする。可変高さの行内で「光が伸びる」ような表現をしたい場合は `Stack`ではなく`AnimatedBuilder`でグラデーションの`stops`を動かす方式にする(例: [detail_screen.dart](lib/features/detail/detail_screen.dart) の `_Timeline` 内タイムライン接続線)。
+- **無限ループするアニメーションがある画面で `pumpAndSettle()` を使わない**: パルス演出(`..repeat(reverse: true)`など)は永久に「settle」しないためテストがハングする。`for`ループで `tester.pump(Duration(...))` を規定回数呼ぶ方式にする。
+- **`context.push()` 直後は1回空の `pump()` を挟む**: go_routerの画面遷移トランジションは、時間を指定した`pump(duration)`だけだと開始前のフレームを拾えないことがある。`await tester.pump(); await tester.pump(duration);` の2段階にすると安定する。
+- **`find.text()` の文字列重複に注意**: 同じ文字列が別の場所でも使われていないか確認する(例: `TransferCase.probabilityLabel` が100%のとき返す `'OFFICIAL'` と、OFFICIAL演出オーバーレイの見出し文字列が衝突した)。曖昧な場合は `find.byType()` や `find.textContaining()` で一意に絞る。
+- **`showModalBottomSheet`の中身は`MediaQuery.size.height`から自前でmaxHeightを計算しない**: シートの実際の高さは`isScrollControlled`の指定や画面サイズによって変わり、自前計算とズレるとオーバーフローする(実際に発生した)。`isScrollControlled: true` を指定した上で、可変長リスト部分は`ConstrainedBox`ではなく`Flexible`にラップし、親から降りてくる実際の制約に従わせる。
+- **長いリストを`ListView(children:[...])`でテストする場合は`scrollUntilVisible`→`ensureVisible`の2段階にする**: 対象がビューポート外だと`find`で見つからず(`.builder`でなくてもスライバーは遅延マウントされる)、`scrollUntilVisible`だけだと要素の中心が可視領域の外に残ることがありタップが外れる(シートのバリアに当たって閉じてしまう)。`scrollUntilVisible`で存在を確定させた後、`ensureVisible`で完全に可視領域内へ寄せてからタップする。テスト用ビューポートは800×600固定なので、画面下部のボタンは`tap()`前に`ensureVisible`が必要になることが多い。
+- **ネイティブプラグイン(`flutter_local_notifications`など)はウィジェットテストで実際には呼び出せない**: プラットフォームチャンネル未実装のため呼び出すと例外になる(`MissingPluginException`または内部の`LateInitializationError`)。[notification_service.dart](lib/data/notification_service.dart)のように呼び出し側で`try/catch`して失敗を戻り値で返す設計にしておくと、テストでは「失敗時にクラッシュせずエラーメッセージを出す」ところまでは検証できる。実際に通知が飛ぶかどうかは実機の`flutter run`でしか確認できない。
+- **`sharedPreferencesProvider`のように起動時に`override`が要るプロバイダを使う画面は、テストでも`ProviderScope(overrides:[...])`が必須**: `pumpWidget(const ProviderScope(child: TransferNowApp()))`のように素の`ProviderScope`だとプロバイダ生成時に`UnimplementedError`で落ちる。`SharedPreferences.setMockInitialValues({})` → `SharedPreferences.getInstance()` → `overrides: [sharedPreferencesProvider.overrideWithValue(prefs)]`という組み立てをテストファイル内の共通ヘルパー(`_pumpApp`)にまとめて全テストで使い回す。
+- **同じ型のウィジェットを`pumpWidget`で2回流しても`State`は再生成されない**: 「アプリ再起動」をテストで再現するために`TransferNowApp`を2回`pumpWidget`しても、Flutterは同じ位置・同じ型のウィジェットとみなして既存の`State`(`late final GoRouter`が保持する画面遷移状態ごと)を使い回してしまい、意図通りに初期状態へ戻らない。`pumpWidget(const SizedBox.shrink())`のような無関係なウィジェットを一度挟んでから次のウィジェットをpumpすると、古いツリーが確実に破棄されて`initState`からやり直される。
+
+## ネイティブ設定が必要な依存を追加したとき
+
+`flutter pub add`しただけでは動かないパッケージがある(`flutter_local_notifications`が実例)。追加時にそのパッケージの`android/build.gradle`を読み、`coreLibraryDesugaringEnabled`や`compileSdk`の要求がないか確認する。ある場合は[android/app/build.gradle.kts](android/app/build.gradle.kts)にも同じ設定(`isCoreLibraryDesugaringEnabled = true` + `coreLibraryDesugaring`依存)を追加しないと、実機ビルド時に「requires core library desugaring to be enabled for :app」のようなエラーになる。Android 13+ (API33)以降の権限が要る機能は[AndroidManifest.xml](android/app/src/main/AndroidManifest.xml)に`<uses-permission>`を追加する(通知なら`POST_NOTIFICATIONS`)。この手のネイティブ設定変更はホットリロードでは反映されないので、`flutter run`をやり直す必要がある。

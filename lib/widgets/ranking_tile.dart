@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../models/transfer_case.dart';
+import 'entity_image.dart';
 
 /// A compact ranked row used on the MARKET screen (TRENDING / RANKINGS).
 class RankingTile extends StatelessWidget {
@@ -41,14 +42,7 @@ class RankingTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.surface,
-              child: Text(
-                transferCase.playerCountryFlag,
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
+            PlayerAvatar(transferCase: transferCase, radius: 18),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

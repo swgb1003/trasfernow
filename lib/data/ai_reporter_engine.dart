@@ -49,8 +49,8 @@ class AiReporterEngine {
   String? _matchClub(String query) {
     final clubs = <String>{};
     for (final c in cases) {
-      clubs.add(c.fromClub);
-      clubs.add(c.toClub);
+      clubs.add(c.fromClub.name);
+      clubs.add(c.toClub.name);
     }
     for (final club in clubs) {
       if (query.contains(club.toLowerCase())) return club;
@@ -70,7 +70,10 @@ class AiReporterEngine {
   }
 
   bool _mentionsOut(String query) =>
-      query.contains('退団') || query.contains('出て') || query.contains('去る') || query.contains('out');
+      query.contains('退団') ||
+      query.contains('出て') ||
+      query.contains('去る') ||
+      query.contains('out');
 
   String? _mentionsPosition(String query) {
     const map = {
@@ -95,67 +98,82 @@ class AiReporterEngine {
       (query.contains('デカ') || query.contains('大き') || query.contains('高額'));
 
   String _describeCase(TransferCase c) {
-    return '${c.playerName}（${c.fromClub} → ${c.toClub}）は現在「${c.status.label}」の段階です。\n'
+    return '${c.playerName}（${c.fromClub.name} → ${c.toClub.name}）は現在「${c.status.label}」の段階です。\n'
         '${c.headline}。推定成立可能性は${c.probability}%、推定移籍金は€${c.estimatedFeeMillionsEur.toStringAsFixed(0)}mです。';
   }
 
   String _describeClubOut(String club) {
-    final outCases = cases.where((c) => c.fromClub == club).toList()
-      ..sort((a, b) => b.probability.compareTo(a.probability));
+    final outCases =
+        cases.where((c) => c.fromClub.name == club).toList()
+          ..sort((a, b) => b.probability.compareTo(a.probability));
     if (outCases.isEmpty) {
       return '現在$clubから退団しそうな選手の案件は確認できません。';
     }
     final lines = outCases
         .take(3)
-        .map((c) => '・${c.playerName}（→ ${c.toClub}、成立可能性${c.probability}%）')
+        .map(
+          (c) => '・${c.playerName}（→ ${c.toClub.name}、成立可能性${c.probability}%）',
+        )
         .join('\n');
     return '$clubから退団の可能性がある選手は${outCases.length}件あります。\n$lines';
   }
 
   String _describeClubPositionIn(String club, String position) {
-    final inCases = cases
-        .where((c) => c.toClub == club && c.playerPosition == position)
-        .toList()
-      ..sort((a, b) => b.probability.compareTo(a.probability));
+    final inCases =
+        cases
+            .where((c) => c.toClub.name == club && c.playerPosition == position)
+            .toList()
+          ..sort((a, b) => b.probability.compareTo(a.probability));
     if (inCases.isEmpty) {
       return '$clubが狙っている$positionの選手は現在確認できません。';
     }
     final lines = inCases
-        .map((c) => '・${c.playerName}（${c.fromClub}より、成立可能性${c.probability}%）')
+        .map(
+          (c) =>
+              '・${c.playerName}（${c.fromClub.name}より、成立可能性${c.probability}%）',
+        )
         .join('\n');
     return '$clubが獲得を検討している$positionの選手は以下の通りです。\n$lines';
   }
 
   String _describeClubToday(String club) {
-    final relevant = cases.where((c) => c.fromClub == club || c.toClub == club).toList()
-      ..sort((a, b) => b.probability.compareTo(a.probability));
+    final relevant =
+        cases
+            .where((c) => c.fromClub.name == club || c.toClub.name == club)
+            .toList()
+          ..sort((a, b) => b.probability.compareTo(a.probability));
     if (relevant.isEmpty) {
       return '$clubに関係する移籍案件は現在確認できません。';
     }
     final top = relevant.first;
-    final direction = top.toClub == club ? 'の獲得交渉' : 'の退団交渉';
+    final direction = top.toClub.name == club ? 'の獲得交渉' : 'の退団交渉';
     return '$clubに関係する移籍案件は${relevant.length}件動いています。\n'
         '最も進展しているのは${top.playerName}$directionです。${top.headline}。'
         '現在の推定成立可能性は${top.probability}%です。';
   }
 
   String _describeBiggestFee() {
-    final sorted = [...cases]
-      ..sort((a, b) => b.estimatedFeeMillionsEur.compareTo(a.estimatedFeeMillionsEur));
+    final sorted = [...cases]..sort(
+      (a, b) => b.estimatedFeeMillionsEur.compareTo(a.estimatedFeeMillionsEur),
+    );
     final top = sorted.first;
-    return '現在推定移籍金が最も大きいのは${top.playerName}（${top.fromClub} → ${top.toClub}）で、'
+    return '現在推定移籍金が最も大きいのは${top.playerName}（${top.fromClub.name} → ${top.toClub.name}）で、'
         '約€${top.estimatedFeeMillionsEur.toStringAsFixed(0)}mと見られています。'
         '現在のステータスは「${top.status.label}」、成立可能性は${top.probability}%です。';
   }
 
   String _describeOverallToday() {
-    final sorted = [...cases]..sort((a, b) => b.probability.compareTo(a.probability));
+    final sorted = [...cases]
+      ..sort((a, b) => b.probability.compareTo(a.probability));
     final breaking = sorted.take(3).toList();
     final lines = breaking
         .asMap()
         .entries
-        .map((e) => '${e.key + 1}. ${e.value.playerName}への${e.value.status.label}'
-            '（成立可能性${e.value.probability}%）')
+        .map(
+          (e) =>
+              '${e.key + 1}. ${e.value.playerName}への${e.value.status.label}'
+              '（成立可能性${e.value.probability}%）',
+        )
         .join('\n');
     return '現在動いている移籍案件は${cases.length}件あります。\n$lines\n\n'
         '気になるクラブ名や選手名を聞いてもらえれば、詳しくお答えします。';

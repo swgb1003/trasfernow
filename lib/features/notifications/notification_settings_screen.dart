@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../data/favorites_provider.dart';
+import '../../data/firebase_service_providers.dart';
 import '../../data/notification_service.dart';
 import '../../data/notification_settings_provider.dart';
 import '../../data/transfer_case_providers.dart';
@@ -26,7 +29,13 @@ class _NotificationSettingsScreenState
     // Ask for OS permission once, when the user actually opens notification
     // settings, rather than immediately on app launch.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      NotificationService.instance.requestPermission();
+      final remote = ref.read(firebaseMessagingServiceProvider);
+      if (remote != null) {
+        unawaited(remote.requestPermission());
+        unawaited(remote.syncTopics(ref.read(notificationSettingsProvider)));
+      } else {
+        unawaited(NotificationService.instance.requestPermission());
+      }
     });
   }
 
@@ -43,21 +52,30 @@ class _NotificationSettingsScreenState
           const _SectionHeader('通知する種類'),
           SwitchListTile(
             value: settings.breaking,
-            onChanged: notifier.setBreaking,
+            onChanged: (value) {
+              notifier.setBreaking(value);
+              _syncRemoteTopics();
+            },
             activeColor: AppColors.breaking,
             title: const Text('🔥 BREAKING'),
             subtitle: const Text('速報が入ったとき'),
           ),
           SwitchListTile(
             value: settings.agreement,
-            onChanged: notifier.setAgreement,
+            onChanged: (value) {
+              notifier.setAgreement(value);
+              _syncRemoteTopics();
+            },
             activeColor: AppColors.agreement,
             title: const Text('🤝 AGREEMENT'),
             subtitle: const Text('個人合意など、成立間近になったとき'),
           ),
           SwitchListTile(
             value: settings.official,
-            onChanged: notifier.setOfficial,
+            onChanged: (value) {
+              notifier.setOfficial(value);
+              _syncRemoteTopics();
+            },
             activeColor: AppColors.official,
             title: const Text('✅ OFFICIAL'),
             subtitle: const Text('正式発表されたとき'),
@@ -76,7 +94,7 @@ class _NotificationSettingsScreenState
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              'バックエンド未接続のため、実際のプッシュではなく端末のローカル通知として送信します。',
+              '下のボタンは端末内テストです。Firebase接続時は、選択した種類のプッシュ通知も受信します。',
               style: TextStyle(fontSize: 11.5, color: AppColors.textMuted),
             ),
           ),
@@ -94,7 +112,9 @@ class _NotificationSettingsScreenState
             color: AppColors.agreement,
             pick: (cases) {
               final candidates =
-                  cases.where((c) => c.status != TransferStatus.official).toList()
+                  cases
+                      .where((c) => c.status != TransferStatus.official)
+                      .toList()
                     ..sort((a, b) => b.probability.compareTo(a.probability));
               return candidates.isEmpty ? null : candidates.first;
             },
@@ -106,7 +126,9 @@ class _NotificationSettingsScreenState
             color: AppColors.official,
             pick: (cases) {
               final candidates =
-                  cases.where((c) => c.status == TransferStatus.official).toList();
+                  cases
+                      .where((c) => c.status == TransferStatus.official)
+                      .toList();
               return candidates.isEmpty ? null : candidates.first;
             },
             send: NotificationService.instance.notifyOfficial,
@@ -114,6 +136,12 @@ class _NotificationSettingsScreenState
         ],
       ),
     );
+  }
+
+  void _syncRemoteTopics() {
+    final remote = ref.read(firebaseMessagingServiceProvider);
+    if (remote == null) return;
+    unawaited(remote.syncTopics(ref.read(notificationSettingsProvider)));
   }
 }
 
@@ -177,20 +205,31 @@ class _TestNotificationButton extends ConsumerWidget {
   Future<void> _handleTap(BuildContext context, WidgetRef ref) async {
     final favorites = ref.read(favoritesProvider);
     final followedOnly = ref.read(notificationSettingsProvider).followedOnly;
-    var cases = ref.read(transferCasesProvider);
+    late List<TransferCase> cases;
+    try {
+      cases = await ref.read(transferCasesProvider.future);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('移籍情報を読み込めませんでした')));
+      return;
+    }
 
     if (followedOnly) {
-      cases = cases
-          .where(
-            (c) =>
-                favorites.clubs.contains(c.fromClub) ||
-                favorites.clubs.contains(c.toClub) ||
-                favorites.playerCaseIds.contains(c.id),
-          )
-          .toList();
+      cases =
+          cases
+              .where(
+                (c) =>
+                    favorites.clubs.contains(c.fromClub.name) ||
+                    favorites.clubs.contains(c.toClub.name) ||
+                    favorites.playerCaseIds.contains(c.id),
+              )
+              .toList();
     }
 
     final target = pick(cases);
+    if (!context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
 
     if (target == null) {

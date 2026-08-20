@@ -29,4 +29,12 @@ class AppColors {
   static const Color breaking = Color(0xFFFF3B3B);
 
   static const Color gaugeTrack = Color(0xFF262C3A);
+
+  // Product accents used by the TRANSFER NOW identity / onboarding flow.
+  static const Color accentCyan = Color(0xFF69E7FF);
+  static const Color accentCyanStrong = Color(0xFF38D7FF);
+  static const Color accentLime = Color(0xFFB6FF3B);
+  static const Color accentLimeGlow = Color(0xFF8DFF00);
+  static const Color accentLimeBorder = Color(0xFFCEFF7C);
+  static const Color backgroundGlow = Color(0xFF102B37);
 }

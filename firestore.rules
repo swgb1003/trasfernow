@@ -1,0 +1,92 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    // Public product data is readable only after anonymous or permanent auth.
+    // Writes are reserved for Admin SDK / Cloud Functions, which bypass rules.
+    // See SPEC.md §12, §15, §27, §36.
+    match /transferCases/{caseId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /{collection}/{documentId} {
+      allow read: if signedIn()
+        && collection in ['leagues', 'clubs', 'players', 'sources'];
+      allow write: if false;
+    }
+
+    function validFavorites() {
+      return request.resource.data.keys().hasOnly([
+          'clubs', 'playerCaseIds', 'schemaVersion', 'updatedAt'
+        ])
+        && request.resource.data.clubs is list
+        && request.resource.data.clubs.size() <= 50
+        && request.resource.data.playerCaseIds is list
+        && request.resource.data.playerCaseIds.size() <= 200
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validNotifications() {
+      return request.resource.data.keys().hasOnly([
+          'breaking', 'agreement', 'official', 'followedOnly',
+          'schemaVersion', 'updatedAt'
+        ])
+        && request.resource.data.breaking is bool
+        && request.resource.data.agreement is bool
+        && request.resource.data.official is bool
+        && request.resource.data.followedOnly is bool
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validDevice() {
+      return request.resource.data.keys().hasOnly([
+          'token', 'platform', 'updatedAt'
+        ])
+        && request.resource.data.token is string
+        && request.resource.data.token.size() > 0
+        && request.resource.data.token.size() <= 4096
+        && request.resource.data.platform is string
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    // Favorites, preferences and registered FCM devices are private to the
+    // authenticated user and validated per document type. Server-side Admin
+    // SDK access is unaffected. See SPEC.md §13-§15, §27, §36.
+    match /users/{userId} {
+      allow read, create, update, delete: if owns(userId);
+
+      match /preferences/{preferenceId} {
+        allow read, delete: if owns(userId);
+        allow create, update: if owns(userId)
+          && ((preferenceId == 'favorites' && validFavorites())
+            || (preferenceId == 'notifications' && validNotifications()));
+      }
+
+      match /devices/{deviceId} {
+        allow read, delete: if owns(userId);
+        allow create, update: if owns(userId) && validDevice();
+      }
+
+      // Reserved paths for a future normalized favorites migration.
+      match /{collection}/{documentId} {
+        allow read, create, update, delete: if owns(userId)
+          && collection in ['favoriteClubs', 'favoriteCases'];
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

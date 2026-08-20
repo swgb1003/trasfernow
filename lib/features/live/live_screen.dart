@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../data/transfer_case_providers.dart';
 import '../../widgets/breaking_entrance.dart';
 import '../../widgets/transfer_case_card.dart';
+import '../../widgets/async_content_state.dart';
 
 class LiveScreen extends ConsumerStatefulWidget {
   const LiveScreen({super.key});
@@ -20,7 +21,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cases = ref.watch(transferCasesProvider);
+    final casesAsync = ref.watch(transferCasesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -29,63 +30,74 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1),
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: List.generate(_tabs.length, (i) {
-                final selected = i == _tabIndex;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 20),
-                  child: GestureDetector(
-                    onTap: () => setState(() => _tabIndex = i),
-                    child: Column(
-                      children: [
-                        Text(
-                          _tabs[i],
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: selected
-                                ? AppColors.textPrimary
-                                : AppColors.textMuted,
+      body: casesAsync.when(
+        loading: () => const AsyncContentState.loading(),
+        error:
+            (error, _) => AsyncContentState.error(
+              error: error,
+              onRetry: () => ref.invalidate(transferCasesProvider),
+            ),
+        data:
+            (cases) => Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: List.generate(_tabs.length, (i) {
+                      final selected = i == _tabIndex;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 20),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _tabIndex = i),
+                          child: Column(
+                            children: [
+                              Text(
+                                _tabs[i],
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color:
+                                      selected
+                                          ? AppColors.textPrimary
+                                          : AppColors.textMuted,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: 2,
+                                width: 28,
+                                color:
+                                    selected
+                                        ? AppColors.breaking
+                                        : Colors.transparent,
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Container(
-                          height: 2,
-                          width: 28,
-                          color: selected
-                              ? AppColors.breaking
-                              : Colors.transparent,
-                        ),
-                      ],
-                    ),
+                      );
+                    }),
                   ),
-                );
-              }),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: cases.length,
+                    itemBuilder: (context, index) {
+                      final c = cases[index];
+                      final card = TransferCaseCard(
+                        transferCase: c,
+                        isBreaking: index == 0,
+                        onTap: () => context.push('/case/${c.id}'),
+                      );
+                      return index == 0
+                          ? BreakingEntrance(key: ValueKey(c.id), child: card)
+                          : card;
+                    },
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              itemCount: cases.length,
-              itemBuilder: (context, index) {
-                final c = cases[index];
-                final card = TransferCaseCard(
-                  transferCase: c,
-                  isBreaking: index == 0,
-                  onTap: () => context.push('/case/${c.id}'),
-                );
-                return index == 0
-                    ? BreakingEntrance(key: ValueKey(c.id), child: card)
-                    : card;
-              },
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "296388715263",
+    "project_id": "transfer-now-dev",
+    "storage_bucket": "transfer-now-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:296388715263:android:a301aa20c21c66f03fa2ca",
+        "android_client_info": {
+          "package_name": "com.transfernow.transfer_now"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAWeK-iaNjz0yUYCuOaknfLcsMl5U5SZYE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

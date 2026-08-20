@@ -4,19 +4,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:transfer_now/app/app.dart';
+import 'package:transfer_now/data/onboarding_preferences.dart';
 import 'package:transfer_now/data/shared_preferences_provider.dart';
+import 'package:transfer_now/data/dummy_transfer_cases.dart';
+import 'package:transfer_now/data/transfer_case_providers.dart';
+import 'package:transfer_now/data/transfer_case_repository.dart';
+import 'package:transfer_now/models/transfer_case.dart';
+import 'package:transfer_now/widgets/entity_image.dart';
 import 'package:transfer_now/widgets/official_reveal_overlay.dart';
 
 /// Every screen reads `favoritesProvider` / `notificationSettingsProvider`,
 /// both of which require `sharedPreferencesProvider` to be overridden.
 /// `SharedPreferences.setMockInitialValues` gives an in-memory
 /// implementation that works without a platform channel.
-Future<void> _pumpApp(WidgetTester tester) async {
-  SharedPreferences.setMockInitialValues({});
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  TransferCaseRepository? repository,
+}) async {
+  SharedPreferences.setMockInitialValues({
+    OnboardingPreferences.completedKey: true,
+  });
   final prefs = await SharedPreferences.getInstance();
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        if (repository != null)
+          transferCaseRepositoryProvider.overrideWithValue(repository),
+      ],
       child: const TransferNowApp(),
     ),
   );
@@ -24,6 +39,74 @@ Future<void> _pumpApp(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('repository errors show a retry action and recover', (
+    WidgetTester tester,
+  ) async {
+    final repository = _FlakyTransferCaseRepository();
+    await _pumpApp(tester, repository: repository);
+
+    expect(find.text('移籍情報を読み込めませんでした'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('retry-transfer-cases')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('🔥 BREAKING'), findsOneWidget);
+    expect(repository.calls, 2);
+  });
+
+  testWidgets('first launch completes splash, league and club onboarding', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        child: const TransferNowApp(),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('onboarding-splash')), findsOneWidget);
+
+    // The splash stream loops by design, so advance to its timed transition
+    // explicitly rather than waiting for animations to settle.
+    await tester.pump(const Duration(milliseconds: 2500));
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.text('好きなリーグを\n選択してください'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('league-Premier League')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('league-continue')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(find.text('お気に入りクラブを選択'), findsOneWidget);
+    final clubGrid = find.descendant(
+      of: find.byKey(const ValueKey('club-grid')),
+      matching: find.byType(Scrollable),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('club-Liverpool')),
+      80,
+      scrollable: clubGrid,
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('club-Liverpool')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('club-Liverpool')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('onboarding-complete')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('LIVE'), findsWidgets);
+    expect(prefs.getBool(OnboardingPreferences.completedKey), isTrue);
+    expect(prefs.getString(OnboardingPreferences.leagueKey), 'Premier League');
+    expect(prefs.getString(OnboardingPreferences.clubKey), 'Liverpool');
+
+    await tester.tap(find.text('MY'));
+    await tester.pumpAndSettle();
+    expect(find.text('Liverpool'), findsOneWidget);
+  });
+
   testWidgets('LIVE screen shows the top breaking transfer case', (
     WidgetTester tester,
   ) async {
@@ -31,6 +114,7 @@ void main() {
 
     expect(find.text('LIVE'), findsWidgets);
     expect(find.text('🔥 BREAKING'), findsOneWidget);
+    expect(find.byType(PlayerAvatar), findsWidgets);
 
     await tester.tap(find.text('SEARCH'));
     await tester.pumpAndSettle();
@@ -161,8 +245,11 @@ void main() {
       of: find.byKey(const ValueKey('add-picker-list')),
       matching: find.byType(Scrollable),
     );
-    await tester.scrollUntilVisible(find.text('Liverpool'), 50,
-        scrollable: pickerScrollable);
+    await tester.scrollUntilVisible(
+      find.text('Liverpool'),
+      50,
+      scrollable: pickerScrollable,
+    );
     // scrollUntilVisible stops as soon as any part is visible, which can
     // leave it only partially in view (and its computed center outside the
     // sheet's clip bounds); nudge it fully into view before tapping.
@@ -277,7 +364,9 @@ void main() {
   testWidgets(
     'favorites and notification settings persist across a simulated app restart',
     (WidgetTester tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({
+        OnboardingPreferences.completedKey: true,
+      });
 
       // "First launch": remove a favorite club, turn off BREAKING notifications.
       var prefs = await SharedPreferences.getInstance();
@@ -327,4 +416,19 @@ void main() {
       expect(breakingSwitch.value, isFalse);
     },
   );
+}
+
+class _FlakyTransferCaseRepository implements TransferCaseRepository {
+  int calls = 0;
+
+  @override
+  Stream<List<TransferCase>> watchTransferCases() {
+    calls += 1;
+    if (calls == 1) {
+      return Stream.error(StateError('Temporary test failure'));
+    }
+    final cases = [...dummyTransferCases]
+      ..sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
+    return Stream.value(cases);
+  }
 }

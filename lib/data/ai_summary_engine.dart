@@ -28,7 +28,7 @@ AiSummary buildAiSummary(TransferCase transferCase) {
 }
 
 String _currentText(TransferCase c) {
-  final club = c.toClub;
+  final club = c.toClub.name;
   final player = c.playerName;
   return switch (c.status) {
     TransferStatus.rumour => '$clubが$playerの獲得に関心があるとの噂が出ています。',
@@ -49,13 +49,13 @@ String _feeText(TransferCase c) {
 }
 
 String _nextMoveText(TransferStatus status) => switch (status) {
-      TransferStatus.rumour => '今後、クラブ側の正式な関心表明や代理人との接触に進むかが焦点です。',
-      TransferStatus.interest => '代理人や選手側との接触に進む可能性があります。',
-      TransferStatus.contact => '条件面の交渉や正式オファー提出に進む可能性があります。',
-      TransferStatus.negotiation => '数日以内に正式オファーが提出される可能性があります。',
-      TransferStatus.bid => '個人条件での合意に進む可能性があります。',
-      TransferStatus.agreement => 'クラブ間交渉が最終段階に入る可能性があります。',
-      TransferStatus.finalStage => '数日以内に正式発表される可能性が高まっています。',
-      TransferStatus.official => '移籍手続きはすでに完了しています。',
-      TransferStatus.collapsed => '今後、別クラブが名乗りを上げるか動向が注目されます。',
-    };
+  TransferStatus.rumour => '今後、クラブ側の正式な関心表明や代理人との接触に進むかが焦点です。',
+  TransferStatus.interest => '代理人や選手側との接触に進む可能性があります。',
+  TransferStatus.contact => '条件面の交渉や正式オファー提出に進む可能性があります。',
+  TransferStatus.negotiation => '数日以内に正式オファーが提出される可能性があります。',
+  TransferStatus.bid => '個人条件での合意に進む可能性があります。',
+  TransferStatus.agreement => 'クラブ間交渉が最終段階に入る可能性があります。',
+  TransferStatus.finalStage => '数日以内に正式発表される可能性が高まっています。',
+  TransferStatus.official => '移籍手続きはすでに完了しています。',
+  TransferStatus.collapsed => '今後、別クラブが名乗りを上げるか動向が注目されます。',
+};

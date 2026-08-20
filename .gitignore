@@ -33,6 +33,19 @@ migrate_working_dir/
 .pub/
 /build/
 
+# Local Firebase app identifiers (use the committed example as a template)
+/config/firebase.local.json
+
+# Firebase Admin SDK credentials must never be committed.
+**/service-account*.json
+/firebase/node_modules/
+
+# Licensed editorial images are uploaded to Firebase Storage, not Git.
+/firebase/assets/players/*
+!/firebase/assets/players/.gitkeep
+/firebase/assets/club-crests/*
+!/firebase/assets/club-crests/.gitkeep
+
 # Symbolication related
 app.*.symbols
 

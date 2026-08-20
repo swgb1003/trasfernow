@@ -1,14 +1,19 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'club_catalog.dart';
+import 'firebase_service_providers.dart';
 import 'shared_preferences_provider.dart';
-import 'transfer_case_providers.dart';
+import 'user_preferences_repository.dart';
 
 /// お気に入りクラブ / お気に入り選手. See SPEC.md §13, §14.
 ///
-/// Persisted locally via [SharedPreferences] (no backend yet — SPEC.md §36
-/// 開発方針). "お気に入り選手" is tracked per [TransferCase.id] rather than
-/// per player name, since a TransferCase is the only unit of "player"
+/// Persisted locally via [SharedPreferences] and mirrored to the authenticated
+/// user's Firestore preferences. "お気に入り選手" is tracked per case rather
+/// than per player name, since a TransferCase is the only unit of "player"
 /// identity this dummy-data phase models.
 class FavoritesState {
   const FavoritesState({required this.clubs, required this.playerCaseIds});
@@ -18,12 +23,21 @@ class FavoritesState {
 }
 
 class FavoritesNotifier extends StateNotifier<FavoritesState> {
-  FavoritesNotifier(this._prefs) : super(_load(_prefs));
+  FavoritesNotifier(this._prefs, this._cloud) : super(_load(_prefs)) {
+    initializationComplete = _initializeCloud();
+  }
 
   final SharedPreferences _prefs;
+  final UserPreferencesRepository? _cloud;
+  late final Future<void> initializationComplete;
+  int _revision = 0;
 
   static const _clubsKey = 'favorites.clubs';
   static const _playerCaseIdsKey = 'favorites.playerCaseIds';
+
+  String get _syncMarkerKey => 'cloudSync.favorites.${_cloud!.userId}';
+
+  String get _pendingKey => 'cloudSync.favorites.pending.${_cloud!.userId}';
 
   static FavoritesState _load(SharedPreferences prefs) {
     final clubs = prefs.getStringList(_clubsKey);
@@ -49,40 +63,131 @@ class FavoritesNotifier extends StateNotifier<FavoritesState> {
     );
   }
 
-  Future<void> _persist() async {
-    await _prefs.setStringList(_clubsKey, state.clubs.toList());
-    await _prefs.setStringList(_playerCaseIdsKey, state.playerCaseIds.toList());
+  bool get _hasExplicitLocalData =>
+      _prefs.containsKey(_clubsKey) || _prefs.containsKey(_playerCaseIdsKey);
+
+  Future<void> _persistLocal() async {
+    await _prefs.setStringList(_clubsKey, state.clubs.toList()..sort());
+    await _prefs.setStringList(
+      _playerCaseIdsKey,
+      state.playerCaseIds.toList()..sort(),
+    );
+  }
+
+  Future<void> _initializeCloud() async {
+    final cloud = _cloud;
+    if (cloud == null) return;
+
+    final revisionBeforeLoad = _revision;
+    final synchronizedBefore = _prefs.getBool(_syncMarkerKey) ?? false;
+    final hasPendingChanges =
+        _prefs.getBool(_pendingKey) ??
+        (!synchronizedBefore && _hasExplicitLocalData);
+
+    if (hasPendingChanges) {
+      await _pushCloud();
+      return;
+    }
+
+    try {
+      final remote = await cloud.loadFavorites();
+      if (!mounted) return;
+      if (_revision != revisionBeforeLoad) {
+        await _pushCloud();
+        return;
+      }
+      if (remote == null) {
+        await _pushCloud();
+        return;
+      }
+
+      state = FavoritesState(
+        clubs: remote.clubs,
+        playerCaseIds: remote.playerCaseIds,
+      );
+      await _persistLocal();
+      await _markSynchronized();
+    } catch (error) {
+      debugPrint('Favorite cloud restore failed; keeping local data: $error');
+    }
+  }
+
+  Future<void> _pushCloud() async {
+    final cloud = _cloud;
+    if (cloud == null) return;
+    final revision = _revision;
+    final snapshot = FavoritePreferencesData(
+      clubs: {...state.clubs},
+      playerCaseIds: {...state.playerCaseIds},
+    );
+    await _prefs.setBool(_pendingKey, true);
+    try {
+      await cloud.saveFavorites(snapshot);
+      if (revision == _revision) await _markSynchronized();
+    } catch (error) {
+      debugPrint(
+        'Favorite cloud sync failed; local changes are pending: $error',
+      );
+    }
+  }
+
+  Future<void> _markSynchronized() async {
+    await _prefs.setBool(_syncMarkerKey, true);
+    await _prefs.setBool(_pendingKey, false);
+  }
+
+  Future<void> _persistAndSync() async {
+    await _persistLocal();
+    await _pushCloud();
+  }
+
+  /// Explicit retry hook for lifecycle/resume integration and tests.
+  Future<void> synchronize() => _pushCloud();
+
+  void _didChange() {
+    _revision += 1;
+    if (_cloud != null) unawaited(_prefs.setBool(_pendingKey, true));
+    unawaited(_persistAndSync());
   }
 
   void toggleClub(String club) {
     final clubs = {...state.clubs};
     if (!clubs.remove(club)) clubs.add(club);
     state = FavoritesState(clubs: clubs, playerCaseIds: state.playerCaseIds);
-    _persist();
+    _didChange();
+  }
+
+  /// Adds an onboarding choice without accidentally toggling an existing
+  /// seeded favorite off. See SPEC.md §13, §20.
+  void addClub(String club) {
+    if (state.clubs.contains(club)) return;
+    state = FavoritesState(
+      clubs: {...state.clubs, club},
+      playerCaseIds: state.playerCaseIds,
+    );
+    _didChange();
   }
 
   void togglePlayerCase(String caseId) {
     final ids = {...state.playerCaseIds};
     if (!ids.remove(caseId)) ids.add(caseId);
     state = FavoritesState(clubs: state.clubs, playerCaseIds: ids);
-    _persist();
+    _didChange();
   }
 }
 
 final favoritesProvider =
     StateNotifierProvider<FavoritesNotifier, FavoritesState>(
-  (ref) => FavoritesNotifier(ref.watch(sharedPreferencesProvider)),
-);
+      (ref) => FavoritesNotifier(
+        ref.watch(sharedPreferencesProvider),
+        ref.watch(userPreferencesRepositoryProvider),
+      ),
+    );
 
 /// All clubs appearing in the dummy dataset (as either origin or
 /// destination), for the "クラブを追加" picker.
 final allClubsProvider = Provider<List<String>>((ref) {
-  final cases = ref.watch(transferCasesProvider);
-  final clubs = <String>{};
-  for (final c in cases) {
-    clubs.add(c.fromClub);
-    clubs.add(c.toClub);
-  }
-  final list = clubs.toList()..sort();
+  final list =
+      ClubCatalog.all.map((club) => club.name).toSet().toList()..sort();
   return list;
 });

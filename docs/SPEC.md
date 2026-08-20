@@ -795,7 +795,7 @@ iOS / Androidを同一コードベースで開発。
 
 候補：
 
-**Supabase**
+**Firebase / Cloud Firestore**
 
 または
 
@@ -1146,7 +1146,7 @@ PLAYER C
 
 まず、
 
-**Flutter UI → ダミーデータ → TransferCase → Supabase → Football API → AI → Push通知**
+**Flutter UI → ダミーデータ → TransferCase → Firebase → Football API → AI → Push通知**
 
 の順番で実装する。
 

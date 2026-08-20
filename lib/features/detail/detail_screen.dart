@@ -12,6 +12,9 @@ import '../../widgets/ai_summary_card.dart';
 import '../../widgets/official_reveal_overlay.dart';
 import '../../widgets/probability_gauge.dart';
 import '../../widgets/status_badge.dart';
+import '../../widgets/entity_image.dart';
+import '../../models/club.dart';
+import '../../widgets/async_content_state.dart';
 
 class DetailScreen extends ConsumerStatefulWidget {
   const DetailScreen({super.key, required this.caseId});
@@ -27,29 +30,43 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final transferCase = ref.watch(transferCaseByIdProvider(widget.caseId));
+    final transferCaseAsync = ref.watch(
+      transferCaseByIdProvider(widget.caseId),
+    );
 
-    if (transferCase == null) {
-      return const Scaffold(body: Center(child: Text('案件が見つかりません')));
-    }
-
-    // Only ever decided once per case, on the first build — later status
-    // changes don't retroactively pop the celebration back up.
-    _showOfficialReveal ??= transferCase.status == TransferStatus.official;
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          _DetailContent(transferCase: transferCase),
-          if (_showOfficialReveal == true)
-            OfficialRevealOverlay(
-              playerName: transferCase.playerName,
-              fromClub: transferCase.fromClub,
-              toClub: transferCase.toClub,
-              onFinished: () => setState(() => _showOfficialReveal = false),
+    return transferCaseAsync.when(
+      loading: () => const Scaffold(body: AsyncContentState.loading()),
+      error:
+          (error, _) => Scaffold(
+            body: AsyncContentState.error(
+              error: error,
+              onRetry: () => ref.invalidate(transferCasesProvider),
             ),
-        ],
-      ),
+          ),
+      data: (transferCase) {
+        if (transferCase == null) {
+          return const Scaffold(body: Center(child: Text('案件が見つかりません')));
+        }
+
+        // Only ever decided once per case, on the first build — later status
+        // changes don't retroactively pop the celebration back up.
+        _showOfficialReveal ??= transferCase.status == TransferStatus.official;
+
+        return Scaffold(
+          body: Stack(
+            children: [
+              _DetailContent(transferCase: transferCase),
+              if (_showOfficialReveal == true)
+                OfficialRevealOverlay(
+                  playerName: transferCase.playerName,
+                  fromClub: transferCase.fromClub,
+                  toClub: transferCase.toClub,
+                  onFinished: () => setState(() => _showOfficialReveal = false),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -62,7 +79,9 @@ class _DetailContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isFavorite = ref.watch(
-      favoritesProvider.select((s) => s.playerCaseIds.contains(transferCase.id)),
+      favoritesProvider.select(
+        (s) => s.playerCaseIds.contains(transferCase.id),
+      ),
     );
 
     return Scaffold(
@@ -74,9 +93,10 @@ class _DetailContent extends ConsumerWidget {
               isFavorite ? Icons.star : Icons.star_border,
               color: isFavorite ? AppColors.negotiation : null,
             ),
-            onPressed: () => ref
-                .read(favoritesProvider.notifier)
-                .togglePlayerCase(transferCase.id),
+            onPressed:
+                () => ref
+                    .read(favoritesProvider.notifier)
+                    .togglePlayerCase(transferCase.id),
           ),
           const SizedBox(width: 4),
         ],
@@ -110,7 +130,8 @@ class _DetailContent extends ConsumerWidget {
               ),
               _StatTile(
                 label: '現在のステータス',
-                value: '${transferCase.status.emoji} ${transferCase.status.label}',
+                value:
+                    '${transferCase.status.emoji} ${transferCase.status.label}',
               ),
               _StatTile(
                 label: '最終更新',
@@ -136,14 +157,17 @@ class _DetailContent extends ConsumerWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: transferCase.sources
-                .map((s) => Chip(
-                      label: Text(s.name),
-                      backgroundColor: AppColors.card,
-                      side: const BorderSide(color: AppColors.cardBorder),
-                      labelStyle: const TextStyle(fontSize: 12),
-                    ))
-                .toList(),
+            children:
+                transferCase.sources
+                    .map(
+                      (s) => Chip(
+                        label: Text(s.name),
+                        backgroundColor: AppColors.card,
+                        side: const BorderSide(color: AppColors.cardBorder),
+                        labelStyle: const TextStyle(fontSize: 12),
+                      ),
+                    )
+                    .toList(),
           ),
         ],
       ),
@@ -158,48 +182,41 @@ class _ClubRoute extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
       children: [
-        _ClubBadge(name: transferCase.fromClub),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Icon(Icons.arrow_forward, color: AppColors.textMuted),
+        PlayerAvatar(transferCase: transferCase, radius: 44),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _ClubBadge(club: transferCase.fromClub),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Icon(Icons.arrow_forward, color: AppColors.textMuted),
+            ),
+            _ClubBadge(club: transferCase.toClub, highlighted: true),
+          ],
         ),
-        _ClubBadge(name: transferCase.toClub, highlighted: true),
       ],
     );
   }
 }
 
 class _ClubBadge extends StatelessWidget {
-  const _ClubBadge({required this.name, this.highlighted = false});
+  const _ClubBadge({required this.club, this.highlighted = false});
 
-  final String name;
+  final Club club;
   final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push('/club/${Uri.encodeComponent(name)}'),
+      onTap: () => context.push('/club/${Uri.encodeComponent(club.name)}'),
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: highlighted
-                ? AppColors.breaking.withValues(alpha: 0.15)
-                : AppColors.surface,
-            child: Text(
-              name.isNotEmpty ? name[0] : '?',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color:
-                    highlighted ? AppColors.breaking : AppColors.textPrimary,
-              ),
-            ),
-          ),
+          ClubCrest(club: club, size: 52, circular: true),
           const SizedBox(height: 6),
-          Text(name, style: const TextStyle(fontSize: 12)),
+          Text(club.name, style: const TextStyle(fontSize: 12)),
         ],
       ),
     );
@@ -327,16 +344,18 @@ class _TimelineState extends State<_Timeline> with TickerProviderStateMixin {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: event.status.color,
-                            boxShadow: isLast
-                                ? [
-                                    BoxShadow(
-                                      color: event.status.color
-                                          .withValues(alpha: 0.25 + pulse * 0.35),
-                                      blurRadius: 4 + pulse * 10,
-                                      spreadRadius: pulse * 3.5,
-                                    ),
-                                  ]
-                                : null,
+                            boxShadow:
+                                isLast
+                                    ? [
+                                      BoxShadow(
+                                        color: event.status.color.withValues(
+                                          alpha: 0.25 + pulse * 0.35,
+                                        ),
+                                        blurRadius: 4 + pulse * 10,
+                                        spreadRadius: pulse * 3.5,
+                                      ),
+                                    ]
+                                    : null,
                           ),
                         ),
                       );
@@ -381,13 +400,17 @@ class _TimelineState extends State<_Timeline> with TickerProviderStateMixin {
                   padding: const EdgeInsets.only(bottom: 20),
                   child: AnimatedBuilder(
                     animation: dotFade,
-                    builder: (context, child) => Opacity(
-                      opacity: dotFade.value.clamp(0.0, 1.0),
-                      child: Transform.translate(
-                        offset: Offset(0, (1 - dotFade.value.clamp(0.0, 1.0)) * 8),
-                        child: child,
-                      ),
-                    ),
+                    builder:
+                        (context, child) => Opacity(
+                          opacity: dotFade.value.clamp(0.0, 1.0),
+                          child: Transform.translate(
+                            offset: Offset(
+                              0,
+                              (1 - dotFade.value.clamp(0.0, 1.0)) * 8,
+                            ),
+                            child: child,
+                          ),
+                        ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
